@@ -4,20 +4,17 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"booknest/internal/domain"
 )
 
 type publisherService struct {
-	db *pgxpool.Pool
-	r  domain.PublisherRepository
+	r domain.PublisherRepository
 }
 
-func NewPublisherService(db *pgxpool.Pool, r domain.PublisherRepository) domain.PublisherService {
+func NewPublisherService(r domain.PublisherRepository) domain.PublisherService {
 	return &publisherService{
-		db: db,
-		r:  r,
+		r: r,
 	}
 }
 

@@ -15,7 +15,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"booknest/internal/domain"
-	"booknest/internal/pkg/util"
 )
 
 func (s userService) hashPassword(p string) string {
@@ -114,7 +113,7 @@ func (s *userService) verifyToken(
 	tokenHash := s.generateTokenHash(rawToken)
 
 	// Use transaction for the verification process
-	return util.WithTransaction(ctx, s.db, func(txCtx context.Context) error {
+	return s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 
 		// 1. Find token
 		token, err := s.vtr.FindByHashAndType(txCtx, tokenHash, tokenType)

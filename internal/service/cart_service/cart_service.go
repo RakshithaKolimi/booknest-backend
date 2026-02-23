@@ -6,24 +6,20 @@ import (
 	"math"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"booknest/internal/domain"
 )
 
 type cartService struct {
-	db       *pgxpool.Pool
 	cartRepo domain.CartRepository
 	bookRepo domain.BookRepository
 }
 
 func NewCartService(
-	db *pgxpool.Pool,
 	cartRepo domain.CartRepository,
 	bookRepo domain.BookRepository,
 ) domain.CartService {
 	return &cartService{
-		db:       db,
 		cartRepo: cartRepo,
 		bookRepo: bookRepo,
 	}

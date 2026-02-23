@@ -13,16 +13,21 @@ var beginTx = func(ctx context.Context, pool *pgxpool.Pool) (pgx.Tx, error) {
 	return pool.Begin(ctx)
 }
 
-// Create a transaction function
-// It should be common method to use in a database
-func WithTransaction(
+type pgxTransactionManager struct {
+	pool *pgxpool.Pool
+}
+
+func NewTransactionManager(pool *pgxpool.Pool) domain.TransactionManager {
+	return &pgxTransactionManager{pool: pool}
+}
+
+func (m *pgxTransactionManager) InTransaction(
 	ctx context.Context,
-	pool *pgxpool.Pool,
 	fn func(ctx context.Context) error,
 ) error {
 
 	// Begin the transaction
-	tx, err := beginTx(ctx, pool)
+	tx, err := beginTx(ctx, m.pool)
 	if err != nil {
 		return err
 	}
@@ -38,4 +43,13 @@ func WithTransaction(
 
 	// Commit the transaction
 	return tx.Commit(ctx)
+}
+
+// WithTransaction is kept for backward compatibility.
+func WithTransaction(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	fn func(ctx context.Context) error,
+) error {
+	return NewTransactionManager(pool).InTransaction(ctx, fn)
 }

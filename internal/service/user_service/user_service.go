@@ -6,21 +6,19 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"booknest/internal/domain"
-	"booknest/internal/pkg/util"
 )
 
 type userService struct {
-	db  *pgxpool.Pool
+	txm domain.TransactionManager
 	r   domain.UserRepository
 	vtr domain.VerificationTokenRepository
 }
 
-func NewUserService(db *pgxpool.Pool, r domain.UserRepository, vtr domain.VerificationTokenRepository) domain.UserService {
+func NewUserService(txm domain.TransactionManager, r domain.UserRepository, vtr domain.VerificationTokenRepository) domain.UserService {
 	return &userService{
-		db:  db,
+		txm: txm,
 		r:   r,
 		vtr: vtr,
 	}
@@ -41,7 +39,7 @@ func (s *userService) Register(
 	var mobileOTP string
 
 	// Use transaction for user registration
-	err := util.WithTransaction(ctx, s.db, func(txCtx context.Context) error {
+	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		// Create an user domain
 		user := &domain.User{
 			ID:        uuid.New(),
@@ -150,7 +148,7 @@ func (s *userService) ForgotPassword(
 ) (string, error) {
 	var rawToken string
 
-	err := util.WithTransaction(ctx, s.db, func(txCtx context.Context) error {
+	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		var user domain.User
 		var err error
 
@@ -195,7 +193,7 @@ func (s *userService) ResetPassword(
 	newPassword string,
 ) error {
 
-	return util.WithTransaction(ctx, s.db, func(txCtx context.Context) error {
+	return s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		// Get user by ID
 		user, err := s.r.FindByID(txCtx, userID)
 		if err != nil {
@@ -217,7 +215,7 @@ func (s *userService) ResetPasswordWithToken(
 ) error {
 	tokenHash := s.generateTokenHash(rawToken)
 
-	return util.WithTransaction(ctx, s.db, func(txCtx context.Context) error {
+	return s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		token, err := s.vtr.FindByHashAndType(txCtx, tokenHash, domain.PasswordReset)
 		if err != nil {
 			return errors.New("invalid or expired token")
@@ -269,7 +267,7 @@ func (s *userService) ResendEmailVerification(
 	var emailToken *domain.VerificationToken
 	var email string
 
-	err := util.WithTransaction(ctx, s.db, func(txCtx context.Context) error {
+	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		// Fetch user
 		user, err := s.r.FindByID(txCtx, userID)
 		if err != nil {
@@ -332,7 +330,7 @@ func (s *userService) ResendMobileOTP(
 	var otp string
 	var mobile string
 
-	err := util.WithTransaction(ctx, s.db, func(txCtx context.Context) error {
+	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		// Fetch user
 		user, err := s.r.FindByID(txCtx, userID)
 		if err != nil {

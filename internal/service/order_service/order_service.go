@@ -7,25 +7,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"booknest/internal/domain"
-	"booknest/internal/pkg/util"
 )
 
 type orderService struct {
-	db        *pgxpool.Pool
+	txm       domain.TransactionManager
 	orderRepo domain.OrderRepository
 	cartRepo  domain.CartRepository
 }
 
 func NewOrderService(
-	db *pgxpool.Pool,
+	txm domain.TransactionManager,
 	orderRepo domain.OrderRepository,
 	cartRepo domain.CartRepository,
 ) domain.OrderService {
 	return &orderService{
-		db:        db,
+		txm:       txm,
 		orderRepo: orderRepo,
 		cartRepo:  cartRepo,
 	}
@@ -38,7 +36,7 @@ func (s *orderService) Checkout(
 ) (domain.OrderView, error) {
 	var orderView domain.OrderView
 
-	err := util.WithTransaction(ctx, s.db, func(txCtx context.Context) error {
+	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		cart, err := s.cartRepo.GetOrCreateCart(txCtx, userID)
 		if err != nil {
 			return err
@@ -116,7 +114,7 @@ func (s *orderService) ConfirmPayment(
 ) (domain.OrderView, error) {
 	var orderView domain.OrderView
 
-	err := util.WithTransaction(ctx, s.db, func(txCtx context.Context) error {
+	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		order, err := s.orderRepo.GetOrderByID(txCtx, input.OrderID)
 		if err != nil {
 			return errors.New("order not found")

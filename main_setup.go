@@ -17,6 +17,7 @@ import (
 	"booknest/internal/http/controller"
 	"booknest/internal/http/database"
 	"booknest/internal/middleware"
+	"booknest/internal/pkg/util"
 	"booknest/internal/repository"
 	"booknest/internal/service/author_service"
 	"booknest/internal/service/book_service"
@@ -70,11 +71,12 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 
 	userRepo := repository.NewUserRepo(dbpool, gormdb)
 	vtRepo := repository.NewVerificationRepo(dbpool, gormdb)
-	userService := user_service.NewUserService(dbpool, userRepo, vtRepo)
+	txm := util.NewTransactionManager(dbpool)
+	userService := user_service.NewUserService(txm, userRepo, vtRepo)
 	userController := controller.NewUserController(userService)
 
 	bookRepo := repository.NewBookRepository(gormdb, sqlDB)
-	bookService := book_service.NewBookService(bookRepo, gormdb)
+	bookService := book_service.NewBookService(bookRepo)
 	bookController := controller.NewBookController(bookService)
 
 	authorRepo := repository.NewAuthorRepo(gormdb)
@@ -86,15 +88,15 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	categoryController := controller.NewCategoryController(categoryService)
 
 	publisherRepo := repository.NewPublisherRepo(dbpool, gormdb)
-	publisherService := publisher_service.NewPublisherService(dbpool, publisherRepo)
+	publisherService := publisher_service.NewPublisherService(publisherRepo)
 	publisherController := controller.NewPublisherController(publisherService)
 
 	cartRepo := repository.NewCartRepo(dbpool)
-	cartService := cart_service.NewCartService(dbpool, cartRepo, bookRepo)
+	cartService := cart_service.NewCartService(cartRepo, bookRepo)
 	cartController := controller.NewCartController(cartService)
 
 	orderRepo := repository.NewOrderRepo(dbpool)
-	orderService := order_service.NewOrderService(dbpool, orderRepo, cartRepo)
+	orderService := order_service.NewOrderService(txm, orderRepo, cartRepo)
 	orderController := controller.NewOrderController(orderService)
 
 	r := gin.Default()

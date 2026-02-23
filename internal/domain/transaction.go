@@ -18,3 +18,8 @@ type DBExecer interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
+
+// TransactionManager abstracts transaction handling so services don't depend on DB drivers.
+type TransactionManager interface {
+	InTransaction(ctx context.Context, fn func(ctx context.Context) error) error
+}

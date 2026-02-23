@@ -84,10 +84,12 @@ type BookSearchResult struct {
 
 type BookRepository interface {
 	Create(ctx context.Context, book *Book) error
+	CreateWithRelations(ctx context.Context, input BookInput) (*Book, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*Book, error)
 	List(ctx context.Context, limit, offset int) ([]Book, error)
 	FilterByCriteria(ctx context.Context, filter BookFilter, pagination QueryOptions) ([]Book, int64, error)
 	Update(ctx context.Context, book *Book) error
+	UpdateWithRelations(ctx context.Context, id uuid.UUID, input BookInput) (*Book, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 

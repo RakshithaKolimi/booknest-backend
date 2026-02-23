@@ -6,21 +6,28 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 
 	"booknest/internal/domain"
 )
 
 type mockBookRepository struct {
-	findByIDFunc         func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
-	listFunc             func(ctx context.Context, limit, offset int) ([]domain.Book, error)
-	filterByCriteriaFunc func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, error)
-	deleteFunc           func(ctx context.Context, id uuid.UUID) error
+	createWithRelationsFunc func(ctx context.Context, input domain.BookInput) (*domain.Book, error)
+	findByIDFunc            func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
+	listFunc                func(ctx context.Context, limit, offset int) ([]domain.Book, error)
+	filterByCriteriaFunc    func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, error)
+	updateWithRelationsFunc func(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error)
+	deleteFunc              func(ctx context.Context, id uuid.UUID) error
 }
 
 func (m *mockBookRepository) Create(ctx context.Context, book *domain.Book) error {
 	return nil
+}
+
+func (m *mockBookRepository) CreateWithRelations(ctx context.Context, input domain.BookInput) (*domain.Book, error) {
+	if m.createWithRelationsFunc != nil {
+		return m.createWithRelationsFunc(ctx, input)
+	}
+	return nil, errors.New("not implemented")
 }
 
 func (m *mockBookRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
@@ -48,57 +55,18 @@ func (m *mockBookRepository) Update(ctx context.Context, book *domain.Book) erro
 	return nil
 }
 
+func (m *mockBookRepository) UpdateWithRelations(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error) {
+	if m.updateWithRelationsFunc != nil {
+		return m.updateWithRelationsFunc(ctx, id, input)
+	}
+	return nil, errors.New("not implemented")
+}
+
 func (m *mockBookRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	if m.deleteFunc != nil {
 		return m.deleteFunc(ctx, id)
 	}
 	return nil
-}
-
-func TestUniqueCategoryIDsRemovesNilAndDuplicates(t *testing.T) {
-	first := uuid.New()
-	second := uuid.New()
-
-	result := uniqueCategoryIDs([]uuid.UUID{uuid.Nil, first, second, first, uuid.Nil, second})
-	if len(result) != 2 {
-		t.Fatalf("expected 2 unique category IDs, got %d", len(result))
-	}
-	if result[0] != first || result[1] != second {
-		t.Fatalf("unexpected order/content: %+v", result)
-	}
-
-	empty := uniqueCategoryIDs(nil)
-	if empty != nil {
-		t.Fatalf("expected nil for empty input, got %+v", empty)
-	}
-}
-
-func TestValidateCategories(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open sqlite db: %v", err)
-	}
-	if err := db.AutoMigrate(&domain.Category{}); err != nil {
-		t.Fatalf("failed migration: %v", err)
-	}
-
-	idOne := uuid.New()
-	idTwo := uuid.New()
-	if err := db.Create(&domain.Category{ID: idOne, Name: "A"}).Error; err != nil {
-		t.Fatalf("failed to seed category A: %v", err)
-	}
-	if err := db.Create(&domain.Category{ID: idTwo, Name: "B"}).Error; err != nil {
-		t.Fatalf("failed to seed category B: %v", err)
-	}
-
-	if err := validateCategories(db, []uuid.UUID{idOne, idTwo}); err != nil {
-		t.Fatalf("expected categories to validate, got %v", err)
-	}
-
-	missingErr := validateCategories(db, []uuid.UUID{idOne, uuid.New()})
-	if missingErr == nil || missingErr.Error() != "one or more categories are invalid" {
-		t.Fatalf("expected invalid categories error, got %v", missingErr)
-	}
 }
 
 func TestBookServiceReadAndFilterPassThrough(t *testing.T) {
@@ -134,7 +102,7 @@ func TestBookServiceReadAndFilterPassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil)
+	svc := NewBookService(repo)
 
 	book, err := svc.GetBook(context.Background(), bookID)
 	if err != nil || book.ID != bookID {
@@ -156,5 +124,46 @@ func TestBookServiceReadAndFilterPassThrough(t *testing.T) {
 
 	if err := svc.DeleteBook(context.Background(), bookID); err != nil {
 		t.Fatalf("unexpected DeleteBook error: %v", err)
+	}
+}
+
+func TestBookServiceCreateAndUpdatePassThrough(t *testing.T) {
+	bookID := uuid.New()
+	input := domain.BookInput{
+		Name:        "Book",
+		AuthorName:  "Author",
+		PublisherID: uuid.New(),
+	}
+	createCalled := false
+	updateCalled := false
+
+	repo := &mockBookRepository{
+		createWithRelationsFunc: func(ctx context.Context, got domain.BookInput) (*domain.Book, error) {
+			createCalled = true
+			return &domain.Book{ID: bookID, Name: got.Name}, nil
+		},
+		updateWithRelationsFunc: func(ctx context.Context, id uuid.UUID, got domain.BookInput) (*domain.Book, error) {
+			updateCalled = true
+			if id != bookID {
+				t.Fatalf("unexpected id")
+			}
+			return &domain.Book{ID: id, Name: got.Name}, nil
+		},
+	}
+
+	svc := NewBookService(repo)
+
+	created, err := svc.CreateBook(context.Background(), input)
+	if err != nil || created.ID != bookID {
+		t.Fatalf("unexpected create result: %+v err=%v", created, err)
+	}
+
+	updated, err := svc.UpdateBook(context.Background(), bookID, input)
+	if err != nil || updated.ID != bookID {
+		t.Fatalf("unexpected update result: %+v err=%v", updated, err)
+	}
+
+	if !createCalled || !updateCalled {
+		t.Fatalf("expected both create and update repository calls")
 	}
 }

@@ -66,6 +66,9 @@ type mockBookRepository struct {
 }
 
 func (m *mockBookRepository) Create(ctx context.Context, book *domain.Book) error { return nil }
+func (m *mockBookRepository) CreateWithRelations(ctx context.Context, input domain.BookInput) (*domain.Book, error) {
+	return nil, nil
+}
 func (m *mockBookRepository) List(ctx context.Context, limit, offset int) ([]domain.Book, error) {
 	return nil, nil
 }
@@ -73,6 +76,9 @@ func (m *mockBookRepository) FilterByCriteria(ctx context.Context, filter domain
 	return nil, 0, nil
 }
 func (m *mockBookRepository) Update(ctx context.Context, book *domain.Book) error { return nil }
+func (m *mockBookRepository) UpdateWithRelations(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error) {
+	return nil, nil
+}
 func (m *mockBookRepository) Delete(ctx context.Context, id uuid.UUID) error { return nil }
 func (m *mockBookRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
 	if m.findByIDFunc != nil {
@@ -182,5 +188,91 @@ func TestUpsertItemSuccessRoundsDiscountedPrice(t *testing.T) {
 	}
 	if view.TotalItems != 2 || view.Subtotal != 169.98 {
 		t.Fatalf("unexpected cart view: %+v", view)
+	}
+}
+
+func TestGetCartAndRemoveAndClear(t *testing.T) {
+	userID := uuid.New()
+	cartID := uuid.New()
+	bookID := uuid.New()
+	removed := false
+	cleared := false
+
+	repo := &mockCartRepository{
+		getOrCreateCartFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.Cart, error) {
+			return domain.Cart{ID: cartID, UserID: userID}, nil
+		},
+		getCartItemsFunc: func(ctx context.Context, gotUserID uuid.UUID) ([]domain.CartItemDetail, error) {
+			return []domain.CartItemDetail{{BookID: bookID, Count: 1, LineTotal: 99}}, nil
+		},
+		removeCartItemFunc: func(ctx context.Context, gotCartID uuid.UUID, gotBookID uuid.UUID) error {
+			removed = true
+			return nil
+		},
+		clearCartFunc: func(ctx context.Context, gotCartID uuid.UUID) error {
+			cleared = true
+			return nil
+		},
+	}
+
+	svc := NewCartService(repo, &mockBookRepository{})
+	view, err := svc.GetCart(context.Background(), userID)
+	if err != nil || view.TotalItems != 1 {
+		t.Fatalf("unexpected GetCart result: %+v err=%v", view, err)
+	}
+
+	_, err = svc.RemoveItem(context.Background(), userID, bookID)
+	if err != nil {
+		t.Fatalf("unexpected RemoveItem error: %v", err)
+	}
+	if !removed {
+		t.Fatalf("expected remove call")
+	}
+
+	err = svc.Clear(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("unexpected Clear error: %v", err)
+	}
+	if !cleared {
+		t.Fatalf("expected clear call")
+	}
+}
+
+func TestAddAndUpdateItemDelegateToUpsert(t *testing.T) {
+	userID := uuid.New()
+	bookID := uuid.New()
+	cartID := uuid.New()
+	calls := 0
+
+	svc := NewCartService(
+		&mockCartRepository{
+			getOrCreateCartFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.Cart, error) {
+				return domain.Cart{ID: cartID, UserID: gotUserID}, nil
+			},
+			upsertCartItemFunc: func(ctx context.Context, gotCartID uuid.UUID, gotBookID uuid.UUID, count int, unitPrice float64) error {
+				calls++
+				return nil
+			},
+			getCartItemsFunc: func(ctx context.Context, gotUserID uuid.UUID) ([]domain.CartItemDetail, error) {
+				return []domain.CartItemDetail{{BookID: gotUserID, Count: 1, LineTotal: 10}}, nil
+			},
+		},
+		&mockBookRepository{
+			findByIDFunc: func(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+				return &domain.Book{ID: bookID, IsActive: true, AvailableStock: 100, Price: 10}, nil
+			},
+		},
+	)
+
+	_, err := svc.AddItem(context.Background(), userID, domain.CartItemInput{BookID: bookID, Count: 1})
+	if err != nil {
+		t.Fatalf("unexpected AddItem error: %v", err)
+	}
+	_, err = svc.UpdateItem(context.Background(), userID, domain.CartItemInput{BookID: bookID, Count: 1})
+	if err != nil {
+		t.Fatalf("unexpected UpdateItem error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected two upsert calls, got %d", calls)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -52,5 +53,68 @@ func TestSetupServer_ConnectGORMError(t *testing.T) {
 	_, err := SetupServer(&pgxpool.Pool{})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
+	}
+}
+
+func TestUseCORSMiddleware_PreflightAllowedOrigin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(useCORSMiddleware(map[string]bool{"http://localhost:3000": true}))
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodOptions, "/ping", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for preflight, got %d", w.Code)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:3000" {
+		t.Fatalf("expected allow-origin header, got %q", got)
+	}
+}
+
+func TestUseCORSMiddleware_GetAllowedOrigin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(useCORSMiddleware(map[string]bool{"http://localhost:5173": true}))
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/ping", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET, got %d", w.Code)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+		t.Fatalf("expected allow-origin header, got %q", got)
+	}
+}
+
+func TestUseCORSMiddleware_DisallowedOrigin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(useCORSMiddleware(map[string]bool{"http://localhost:5173": true}))
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/ping", nil)
+	req.Header.Set("Origin", "http://malicious.local")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET, got %d", w.Code)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected no allow-origin header, got %q", got)
 	}
 }

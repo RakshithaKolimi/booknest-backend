@@ -119,3 +119,79 @@ func TestBookQueryHelpers_FilterAndSort(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, strings.Contains(defaultSorted, "b.created_at DESC"))
 }
+
+func TestBookRepo_CreateAndUpdateWithRelations(t *testing.T) {
+	db := setupTestDB(t,
+		&domain.Author{},
+		&domain.Publisher{},
+		&domain.Category{},
+		&domain.Book{},
+		&domain.BookCategory{},
+	)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	repo := &bookRepository{db: db, sql: sqlDB}
+	ctx := context.Background()
+
+	publisherID := uuid.New()
+	categoryA := uuid.New()
+	categoryB := uuid.New()
+	existingAuthorID := uuid.New()
+	require.NoError(t, db.Create(&domain.Publisher{
+		ID:          publisherID,
+		LegalName:   "Legal",
+		TradingName: "Trading",
+		Email:       "a@b.com",
+		Mobile:      "+911111111112",
+		Address:     "Addr",
+		City:        "City",
+		State:       "State",
+		Country:     "Country",
+		Zipcode:     "123456",
+	}).Error)
+	require.NoError(t, db.Create(&domain.Category{ID: categoryA, Name: "One"}).Error)
+	require.NoError(t, db.Create(&domain.Category{ID: categoryB, Name: "Two"}).Error)
+	require.NoError(t, db.Create(&domain.Author{ID: existingAuthorID, Name: "Existing"}).Error)
+
+	created, err := repo.CreateWithRelations(ctx, domain.BookInput{
+		Name:               "Created Book",
+		AuthorID:           &existingAuthorID,
+		AuthorName:         "Ignored",
+		AvailableStock:     5,
+		IsActive:           true,
+		Description:        "d",
+		Price:              100,
+		DiscountPercentage: 10,
+		PublisherID:        publisherID,
+		CategoryIDs:        []uuid.UUID{categoryA, categoryA, uuid.Nil, categoryB},
+	})
+	require.NoError(t, err)
+	require.Equal(t, existingAuthorID, created.AuthorID)
+
+	var links []domain.BookCategory
+	require.NoError(t, db.Where("book_id = ?", created.ID).Find(&links).Error)
+	require.Len(t, links, 2)
+
+	updated, err := repo.UpdateWithRelations(ctx, created.ID, domain.BookInput{
+		Name:               "Updated Book",
+		AuthorName:         "New Author",
+		AvailableStock:     8,
+		IsActive:           true,
+		Description:        "new",
+		Price:              120,
+		DiscountPercentage: 0,
+		PublisherID:        publisherID,
+		CategoryIDs:        []uuid.UUID{categoryA},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Updated Book", updated.Name)
+
+	var newAuthor domain.Author
+	require.NoError(t, db.Where("LOWER(name) = LOWER(?)", "New Author").First(&newAuthor).Error)
+	require.NotEqual(t, uuid.Nil, newAuthor.ID)
+
+	links = nil
+	require.NoError(t, db.Where("book_id = ?", created.ID).Find(&links).Error)
+	require.Len(t, links, 1)
+	require.Equal(t, categoryA, links[0].CategoryID)
+}

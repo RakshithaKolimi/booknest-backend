@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
@@ -30,6 +31,64 @@ func NewBookRepository(db *gorm.DB, sql *sql.DB) domain.BookRepository {
 // Use GORM to create a book
 func (r *bookRepository) Create(ctx context.Context, book *domain.Book) error {
 	return r.db.WithContext(ctx).Create(book).Error
+}
+
+func (r *bookRepository) CreateWithRelations(
+	ctx context.Context,
+	input domain.BookInput,
+) (*domain.Book, error) {
+	book := &domain.Book{
+		ID:   uuid.New(),
+		Name: input.Name,
+	}
+
+	categoryIDs := uniqueCategoryIDs(input.CategoryIDs)
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		authorID, err := resolveAuthorID(tx, input.AuthorID, input.AuthorName)
+		if err != nil {
+			return err
+		}
+
+		book.AuthorID = authorID
+		book.AvailableStock = input.AvailableStock
+		book.ImageURL = input.ImageURL
+		book.IsActive = input.IsActive
+		book.Description = input.Description
+		book.ISBN = input.ISBN
+		book.Price = input.Price
+		book.DiscountPercentage = input.DiscountPercentage
+		book.PublisherID = input.PublisherID
+
+		if err := tx.Create(book).Error; err != nil {
+			return err
+		}
+
+		if len(categoryIDs) == 0 {
+			return nil
+		}
+
+		if err := validateCategories(tx, categoryIDs); err != nil {
+			return err
+		}
+
+		for _, cid := range categoryIDs {
+			bc := domain.BookCategory{
+				BookID:     book.ID,
+				CategoryID: cid,
+			}
+			if err := tx.Create(&bc).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return book, nil
 }
 
 func (r *bookRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
@@ -128,6 +187,70 @@ func (r *bookRepository) List(ctx context.Context, limit, offset int) ([]domain.
 
 func (r *bookRepository) Update(ctx context.Context, book *domain.Book) error {
 	return r.db.WithContext(ctx).Save(book).Error
+}
+
+func (r *bookRepository) UpdateWithRelations(
+	ctx context.Context,
+	id uuid.UUID,
+	input domain.BookInput,
+) (*domain.Book, error) {
+	book, err := r.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	categoryIDs := uniqueCategoryIDs(input.CategoryIDs)
+
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		authorID, err := resolveAuthorID(tx, input.AuthorID, input.AuthorName)
+		if err != nil {
+			return err
+		}
+
+		book.Name = input.Name
+		book.AuthorID = authorID
+		book.AvailableStock = input.AvailableStock
+		book.ImageURL = input.ImageURL
+		book.IsActive = input.IsActive
+		book.Description = input.Description
+		book.ISBN = input.ISBN
+		book.Price = input.Price
+		book.DiscountPercentage = input.DiscountPercentage
+		book.PublisherID = input.PublisherID
+
+		if err := tx.Save(book).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Where("book_id = ?", book.ID).Delete(&domain.BookCategory{}).Error; err != nil {
+			return err
+		}
+
+		if len(categoryIDs) == 0 {
+			return nil
+		}
+
+		if err := validateCategories(tx, categoryIDs); err != nil {
+			return err
+		}
+
+		for _, cid := range categoryIDs {
+			bc := domain.BookCategory{
+				BookID:     book.ID,
+				CategoryID: cid,
+			}
+			if err := tx.Create(&bc).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return book, nil
 }
 
 func (r *bookRepository) Delete(ctx context.Context, id uuid.UUID) error {
@@ -230,4 +353,67 @@ func applyBookSorting(
 	}
 
 	return q.OrderBy(column + " " + order)
+}
+
+func uniqueCategoryIDs(categoryIDs []uuid.UUID) []uuid.UUID {
+	if len(categoryIDs) == 0 {
+		return nil
+	}
+
+	seen := make(map[uuid.UUID]struct{}, len(categoryIDs))
+	unique := make([]uuid.UUID, 0, len(categoryIDs))
+	for _, id := range categoryIDs {
+		if id == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+
+	return unique
+}
+
+func validateCategories(tx *gorm.DB, categoryIDs []uuid.UUID) error {
+	var count int64
+	if err := tx.Model(&domain.Category{}).Where("id IN ?", categoryIDs).Count(&count).Error; err != nil {
+		return err
+	}
+
+	if int(count) != len(categoryIDs) {
+		return fmt.Errorf("one or more categories are invalid")
+	}
+
+	return nil
+}
+
+func resolveAuthorID(tx *gorm.DB, authorID *uuid.UUID, authorName string) (uuid.UUID, error) {
+	if authorID != nil && *authorID != uuid.Nil {
+		var author domain.Author
+		if err := tx.First(&author, "id = ?", *authorID).Error; err != nil {
+			return uuid.Nil, err
+		}
+		return *authorID, nil
+	}
+
+	var author domain.Author
+	err := tx.Where("LOWER(name) = LOWER(?)", authorName).First(&author).Error
+	if err != nil {
+		if err != gorm.ErrRecordNotFound {
+			return uuid.Nil, err
+		}
+
+		author = domain.Author{
+			ID:   uuid.New(),
+			Name: authorName,
+		}
+
+		if err := tx.Create(&author).Error; err != nil {
+			return uuid.Nil, err
+		}
+	}
+
+	return author.ID, nil
 }
