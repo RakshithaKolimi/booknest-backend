@@ -56,6 +56,49 @@ func TestSetupServer_ConnectGORMError(t *testing.T) {
 	}
 }
 
+func TestSetupServer_VersionedRoutingAndSwaggerV1(t *testing.T) {
+	t.Setenv("SWAGGER_USER", "swagger")
+	t.Setenv("SWAGGER_PASSWORD", "swagger-pass")
+
+	originalConnectGORM := connectGORM
+	t.Cleanup(func() {
+		connectGORM = originalConnectGORM
+	})
+
+	connectGORM = func() (*gorm.DB, error) {
+		return gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	}
+
+	router, err := SetupServer(&pgxpool.Pool{})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// v1 route should be mounted.
+	wV1 := httptest.NewRecorder()
+	reqV1, _ := http.NewRequest(http.MethodPost, "/api/v1/login", nil)
+	router.ServeHTTP(wV1, reqV1)
+	if wV1.Code == http.StatusNotFound {
+		t.Fatalf("expected /api/v1/login to be mounted, got 404")
+	}
+
+	// Legacy unversioned route should not exist.
+	wLegacy := httptest.NewRecorder()
+	reqLegacy, _ := http.NewRequest(http.MethodPost, "/login", nil)
+	router.ServeHTTP(wLegacy, reqLegacy)
+	if wLegacy.Code != http.StatusNotFound {
+		t.Fatalf("expected /login to be unmounted, got %d", wLegacy.Code)
+	}
+
+	// Versioned Swagger UI should be protected and mounted.
+	wSwagger := httptest.NewRecorder()
+	reqSwagger, _ := http.NewRequest(http.MethodGet, "/swagger/v1/index.html", nil)
+	router.ServeHTTP(wSwagger, reqSwagger)
+	if wSwagger.Code != http.StatusUnauthorized {
+		t.Fatalf("expected swagger route auth challenge, got %d", wSwagger.Code)
+	}
+}
+
 func TestUseCORSMiddleware_PreflightAllowedOrigin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
