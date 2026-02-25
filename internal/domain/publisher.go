@@ -53,5 +53,5 @@ type PublisherService interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 type PublisherController interface {
-	RegisterRoutes(r *gin.Engine)
+	RegisterRoutes(r gin.IRouter)
 }

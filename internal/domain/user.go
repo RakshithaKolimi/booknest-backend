@@ -71,5 +71,5 @@ type UserService interface {
 }
 
 type UserController interface {
-	RegisterRoutes(r *gin.Engine)
+	RegisterRoutes(r gin.IRouter)
 }

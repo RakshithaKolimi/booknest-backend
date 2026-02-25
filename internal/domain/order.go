@@ -75,5 +75,5 @@ type OrderService interface {
 }
 
 type OrderController interface {
-	RegisterRoutes(r *gin.Engine)
+	RegisterRoutes(r gin.IRouter)
 }

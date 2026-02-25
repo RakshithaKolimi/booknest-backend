@@ -113,17 +113,20 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 		ginSwagger.WrapHandler(swaggerFiles.Handler),
 	)
 
+	api := r.Group("/api")
+	v1 := api.Group("/v1")
+
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	userController.RegisterRoutes(r)
-	bookController.RegisterRoutes(r)
-	authorController.RegisterRoutes(r)
-	categoryController.RegisterRoutes(r)
-	publisherController.RegisterRoutes(r)
-	cartController.RegisterRoutes(r)
-	orderController.RegisterRoutes(r)
+	userController.RegisterRoutes(v1)
+	bookController.RegisterRoutes(v1)
+	authorController.RegisterRoutes(v1)
+	categoryController.RegisterRoutes(v1)
+	publisherController.RegisterRoutes(v1)
+	cartController.RegisterRoutes(v1)
+	orderController.RegisterRoutes(v1)
 
 	return r, nil
 }

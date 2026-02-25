@@ -37,5 +37,5 @@ type AuthorService interface {
 }
 
 type AuthorController interface {
-	RegisterRoutes(r *gin.Engine)
+	RegisterRoutes(r gin.IRouter)
 }

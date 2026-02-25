@@ -19,7 +19,7 @@ func NewCartController(service domain.CartService) domain.CartController {
 	return &cartController{service: service}
 }
 
-func (c *cartController) RegisterRoutes(r *gin.Engine) {
+func (c *cartController) RegisterRoutes(r gin.IRouter) {
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{

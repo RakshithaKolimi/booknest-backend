@@ -20,7 +20,7 @@ func NewCategoryController(service domain.CategoryService) domain.CategoryContro
 	return &categoryController{service: service}
 }
 
-func (c *categoryController) RegisterRoutes(r *gin.Engine) {
+func (c *categoryController) RegisterRoutes(r gin.IRouter) {
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{

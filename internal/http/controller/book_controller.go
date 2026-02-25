@@ -19,7 +19,7 @@ func NewBookController(service domain.BookService) domain.BookController {
 	return &bookController{service: service}
 }
 
-func (c *bookController) RegisterRoutes(r *gin.Engine) {
+func (c *bookController) RegisterRoutes(r gin.IRouter) {
 	public := r.Group("/books")
 	{
 		public.POST("/filter", c.filterBooks)

@@ -40,5 +40,5 @@ type CategoryService interface {
 }
 
 type CategoryController interface {
-	RegisterRoutes(r *gin.Engine)
+	RegisterRoutes(r gin.IRouter)
 }

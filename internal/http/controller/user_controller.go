@@ -22,7 +22,7 @@ func NewUserController(service domain.UserService) domain.UserController {
 }
 
 // RegisterRoutes registers all user routes
-func (c *userController) RegisterRoutes(r *gin.Engine) {
+func (c *userController) RegisterRoutes(r gin.IRouter) {
 	auth := r.Group("")
 	{
 		auth.POST(routes.RegisterRoute, c.Register)

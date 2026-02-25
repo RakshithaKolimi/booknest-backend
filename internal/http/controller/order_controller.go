@@ -19,7 +19,7 @@ func NewOrderController(service domain.OrderService) domain.OrderController {
 	return &orderController{service: service}
 }
 
-func (c *orderController) RegisterRoutes(r *gin.Engine) {
+func (c *orderController) RegisterRoutes(r gin.IRouter) {
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{

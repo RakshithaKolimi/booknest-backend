@@ -22,7 +22,7 @@ func NewPublisherController(service domain.PublisherService) domain.PublisherCon
 }
 
 // RegisterRoutes registers all publisher routes
-func (c *publisherController) RegisterRoutes(r *gin.Engine) {
+func (c *publisherController) RegisterRoutes(r gin.IRouter) {
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{

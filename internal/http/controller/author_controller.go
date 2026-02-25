@@ -20,7 +20,7 @@ func NewAuthorController(service domain.AuthorService) domain.AuthorController {
 	return &authorController{service: service}
 }
 
-func (c *authorController) RegisterRoutes(r *gin.Engine) {
+func (c *authorController) RegisterRoutes(r gin.IRouter) {
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuthMiddleware())
 	{

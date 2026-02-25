@@ -103,5 +103,5 @@ type BookService interface {
 }
 
 type BookController interface {
-	RegisterRoutes(r *gin.Engine)
+	RegisterRoutes(r gin.IRouter)
 }

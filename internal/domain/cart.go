@@ -76,5 +76,5 @@ type CartService interface {
 }
 
 type CartController interface {
-	RegisterRoutes(r *gin.Engine)
+	RegisterRoutes(r gin.IRouter)
 }
