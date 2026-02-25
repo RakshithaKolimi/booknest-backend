@@ -1,15 +1,27 @@
 {
+    "consumes": [
+        "application/json"
+    ],
+    "produces": [
+        "application/json"
+    ],
+    "schemes": [
+        "http",
+        "https"
+    ],
     "swagger": "2.0",
     "info": {
-        "description": "Online Bookstore backend (BookNest)",
+        "description": "Production API for BookNest online bookstore. v1 is stable; all endpoints require strict request validation and JWT auth where applicable.",
         "title": "BookNest API",
         "termsOfService": "http://booknest.com/terms/",
         "contact": {
-            "name": "Rakshitha",
+            "name": "BookNest API Support",
+            "url": "https://booknest.com/support",
             "email": "kolimirakshitha@gmail.com"
         },
         "license": {
-            "name": "MIT"
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
         },
         "version": "1.0"
     },
@@ -2435,6 +2447,7 @@
     },
     "securityDefinitions": {
         "BearerAuth": {
+            "description": "Enter JWT as: Bearer {token}",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

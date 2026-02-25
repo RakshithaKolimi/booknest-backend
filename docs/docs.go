@@ -5,17 +5,25 @@ import "github.com/swaggo/swag"
 
 const docTemplate = `{
     "schemes": {{ marshal .Schemes }},
+    "consumes": [
+        "application/json"
+    ],
+    "produces": [
+        "application/json"
+    ],
     "swagger": "2.0",
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
         "termsOfService": "http://booknest.com/terms/",
         "contact": {
-            "name": "Rakshitha",
+            "name": "BookNest API Support",
+            "url": "https://booknest.com/support",
             "email": "kolimirakshitha@gmail.com"
         },
         "license": {
-            "name": "MIT"
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
         },
         "version": "{{.Version}}"
     },
@@ -2441,6 +2449,7 @@ const docTemplate = `{
     },
     "securityDefinitions": {
         "BearerAuth": {
+            "description": "Enter JWT as: Bearer {token}",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
@@ -2453,9 +2462,9 @@ var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
-	Schemes:          []string{},
+	Schemes:          []string{"http", "https"},
 	Title:            "BookNest API",
-	Description:      "Online Bookstore backend (BookNest)",
+	Description:      "Production API for BookNest online bookstore. v1 is stable; all endpoints require strict request validation and JWT auth where applicable.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

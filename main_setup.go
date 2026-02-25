@@ -14,6 +14,8 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
+	"booknest/internal/http/api"
+	apiv1 "booknest/internal/http/api/v1"
 	"booknest/internal/http/controller"
 	"booknest/internal/http/database"
 	"booknest/internal/middleware"
@@ -59,6 +61,8 @@ func useCORSMiddleware(allowedOrigins map[string]bool) gin.HandlerFunc {
 }
 
 func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
+	configureSwagger()
+
 	gormdb, err := connectGORM()
 	if err != nil {
 		return nil, fmt.Errorf("connect gorm: %w", err)
@@ -108,25 +112,31 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	r.Use(middleware.LoggingMiddleware())
 	r.Use(middleware.ErrorHandler())
 	r.GET(
-		"/swagger/*any",
+		"/swagger/v1/*any",
 		middleware.SwaggerAuthMiddleware(),
-		ginSwagger.WrapHandler(swaggerFiles.Handler),
+		ginSwagger.WrapHandler(
+			swaggerFiles.Handler,
+			ginSwagger.InstanceName(swaggerV1InstanceName),
+			ginSwagger.URL(swaggerV1DocURL),
+		),
 	)
-
-	api := r.Group("/api")
-	v1 := api.Group("/v1")
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	userController.RegisterRoutes(v1)
-	bookController.RegisterRoutes(v1)
-	authorController.RegisterRoutes(v1)
-	categoryController.RegisterRoutes(v1)
-	publisherController.RegisterRoutes(v1)
-	cartController.RegisterRoutes(v1)
-	orderController.RegisterRoutes(v1)
+	v1Router := apiv1.NewRouter(
+		userController,
+		bookController,
+		authorController,
+		categoryController,
+		publisherController,
+		cartController,
+		orderController,
+	)
+
+	// Mount only v1 now; v2 can be plugged in with another registrar later.
+	api.MountVersions(r, v1Router)
 
 	return r, nil
 }

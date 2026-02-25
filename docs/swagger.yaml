@@ -1,4 +1,6 @@
 basePath: /api/v1
+consumes:
+- application/json
 definitions:
   Author:
     properties:
@@ -443,10 +445,13 @@ host: localhost:8080
 info:
   contact:
     email: kolimirakshitha@gmail.com
-    name: Rakshitha
-  description: Online Bookstore backend (BookNest)
+    name: BookNest API Support
+    url: https://booknest.com/support
+  description: Production API for BookNest online bookstore. v1 is stable; all endpoints
+    require strict request validation and JWT auth where applicable.
   license:
     name: MIT
+    url: https://opensource.org/licenses/MIT
   termsOfService: http://booknest.com/terms/
   title: BookNest API
   version: "1.0"
@@ -1584,8 +1589,14 @@ paths:
       summary: Get user by ID
       tags:
       - Users
+produces:
+- application/json
+schemes:
+- http
+- https
 securityDefinitions:
   BearerAuth:
+    description: 'Enter JWT as: Bearer {token}'
     in: header
     name: Authorization
     type: apiKey

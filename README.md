@@ -5,6 +5,9 @@ Backend API for BookNest (Go + Gin + PostgreSQL + GORM/pgx).
 ## Architecture
 
 - `main.go`, `main_setup.go`: bootstrap + dependency wiring
+- `internal/http/api`: API version mounting contract (`/api/{version}`)
+- `internal/http/api/v1`: full v1 route registration (current production version)
+- `internal/http/api/v2`: scaffold only (ready for future endpoints)
 - `internal/http/controller`: HTTP handlers and route registration
 - `internal/service`: business logic
 - `internal/repository`: DB access
@@ -48,7 +51,21 @@ go run .
 
 - API: `http://localhost:8080`
 - Health: `GET /health`
-- Swagger: `http://localhost:8080/swagger/index.html`
+- v1 API base: `/api/v1`
+- Swagger (v1): `http://localhost:8080/swagger/v1/index.html`
+
+## API Versioning
+
+- Only `v1` is implemented and mounted in runtime.
+- `v2` folder exists as a plug-in scaffold but is intentionally not mounted.
+- To introduce `v2`, implement handlers/services and mount the v2 registrar in `main_setup.go`.
+
+## Swagger (Production Notes)
+
+- Swagger is served as a named instance (`booknest-v1`) for version isolation.
+- Runtime base path is set to `/api/v1`.
+- Host can be overridden using `API_HOST` (useful behind reverse proxies/gateways).
+- Swagger endpoint is protected by basic auth (`SWAGGER_USER` / `SWAGGER_PASSWORD`).
 
 ## Migrations
 
