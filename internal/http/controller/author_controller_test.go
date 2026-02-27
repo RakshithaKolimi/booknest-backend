@@ -17,7 +17,7 @@ import (
 
 type mockAuthorService struct {
 	findByIDFunc func(ctx context.Context, id uuid.UUID) (*domain.Author, error)
-	listFunc     func(ctx context.Context, limit, offset int) ([]domain.Author, error)
+	listFunc     func(ctx context.Context, limit, offset int, search string) ([]domain.Author, error)
 	createFunc   func(ctx context.Context, input domain.AuthorInput) (*domain.Author, error)
 	updateFunc   func(ctx context.Context, id uuid.UUID, input domain.AuthorInput) (*domain.Author, error)
 	deleteFunc   func(ctx context.Context, id uuid.UUID) error
@@ -30,9 +30,9 @@ func (m *mockAuthorService) FindByID(ctx context.Context, id uuid.UUID) (*domain
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockAuthorService) List(ctx context.Context, limit, offset int) ([]domain.Author, error) {
+func (m *mockAuthorService) List(ctx context.Context, limit, offset int, search string) ([]domain.Author, error) {
 	if m.listFunc != nil {
-		return m.listFunc(ctx, limit, offset)
+		return m.listFunc(ctx, limit, offset, search)
 	}
 	return []domain.Author{}, nil
 }
@@ -86,9 +86,9 @@ func TestAuthorControllerListAndGetByID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	id := uuid.New()
 	svc := &mockAuthorService{
-		listFunc: func(ctx context.Context, limit, offset int) ([]domain.Author, error) {
-			if limit != 7 || offset != 3 {
-				t.Fatalf("unexpected pagination: %d/%d", limit, offset)
+		listFunc: func(ctx context.Context, limit, offset int, search string) ([]domain.Author, error) {
+			if limit != 7 || offset != 3 || search != "tol" {
+				t.Fatalf("unexpected list params: %d/%d %q", limit, offset, search)
 			}
 			return []domain.Author{{ID: id, Name: "A"}}, nil
 		},
@@ -103,7 +103,7 @@ func TestAuthorControllerListAndGetByID(t *testing.T) {
 
 	lw := httptest.NewRecorder()
 	lc, _ := gin.CreateTestContext(lw)
-	lc.Request = httptest.NewRequest(http.MethodGet, "/authors?limit=7&offset=3", nil)
+	lc.Request = httptest.NewRequest(http.MethodGet, "/authors?limit=7&offset=3&search=tol", nil)
 	ctl.List(lc)
 	if lw.Code != http.StatusOK {
 		t.Fatalf("expected 200 from list, got %d", lw.Code)

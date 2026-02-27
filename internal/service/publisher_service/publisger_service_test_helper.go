@@ -12,7 +12,7 @@ import (
 // MockPublisherRepository is a mock implementation of domain.PublisherRepository
 type MockPublisherRepository struct {
 	FindByIDFunc  func(ctx context.Context, id uuid.UUID) (domain.Publisher, error)
-	ListFunc      func(ctx context.Context, limit, offset int) ([]domain.Publisher, error)
+	ListFunc      func(ctx context.Context, limit, offset int, search string) ([]domain.Publisher, error)
 	CreateFunc    func(ctx context.Context, publisher *domain.Publisher) error
 	UpdateFunc    func(ctx context.Context, publisher *domain.Publisher) error
 	SetActiveFunc func(ctx context.Context, id uuid.UUID, active bool) error
@@ -33,9 +33,9 @@ func (m *MockPublisherRepository) Create(ctx context.Context, user *domain.Publi
 	return nil
 }
 
-func (m *MockPublisherRepository) List(ctx context.Context, limit, offset int) ([]domain.Publisher, error) {
+func (m *MockPublisherRepository) List(ctx context.Context, limit, offset int, search string) ([]domain.Publisher, error) {
 	if m.ListFunc != nil {
-		return m.ListFunc(ctx, limit, offset)
+		return m.ListFunc(ctx, limit, offset, search)
 	}
 	return []domain.Publisher{}, nil
 }

@@ -33,7 +33,7 @@ definitions:
         type: integer
       categories:
         items:
-          $ref: '#/definitions/domain.Category'
+          $ref: '#/definitions/Category'
         type: array
       created_at:
         type: string
@@ -61,6 +61,147 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  BookFilter:
+    properties:
+      authorIDs:
+        items:
+          type: string
+        type: array
+      categoryIDs:
+        items:
+          type: string
+        type: array
+      ids:
+        items:
+          type: string
+        type: array
+      isActive:
+        type: boolean
+      maxPrice:
+        format: float64
+        type: number
+      minPrice:
+        format: float64
+        type: number
+      minStock:
+        type: integer
+      publisherIDs:
+        items:
+          type: string
+        type: array
+      search:
+        description: name / author / isbn
+        type: string
+    type: object
+  BookInput:
+    properties:
+      author_id:
+        type: string
+      author_name:
+        type: string
+      available_stock:
+        type: integer
+      category_ids:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      discount_percentage:
+        type: number
+      image_url:
+        type: string
+      is_active:
+        type: boolean
+      isbn:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+      publisher_id:
+        type: string
+    required:
+    - author_name
+    - name
+    - publisher_id
+    type: object
+  BookSearchResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/Book'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  CartItemDetail:
+    properties:
+      author_name:
+        type: string
+      book_id:
+        type: string
+      count:
+        type: integer
+      image_url:
+        type: string
+      line_total:
+        type: number
+      name:
+        type: string
+      unit_price:
+        type: number
+    type: object
+  CartItemInput:
+    properties:
+      book_id:
+        type: string
+      count:
+        minimum: 1
+        type: integer
+    required:
+    - book_id
+    - count
+    type: object
+  CartView:
+    properties:
+      cart_id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/CartItemDetail'
+        type: array
+      subtotal:
+        type: number
+      total_items:
+        type: integer
+      user_id:
+        type: string
+    type: object
+  Category:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  CheckoutInput:
+    properties:
+      payment_method:
+        $ref: '#/definitions/domain.PaymentMethod'
+    required:
+    - payment_method
     type: object
   ForgotPasswordInput:
     properties:
@@ -104,6 +245,39 @@ definitions:
         $ref: '#/definitions/User'
       user_id:
         type: string
+    type: object
+  OrderItemDetail:
+    properties:
+      book_id:
+        type: string
+      count:
+        type: integer
+      image_url:
+        type: string
+      line_total:
+        type: number
+      name:
+        type: string
+      unit_price:
+        type: number
+    type: object
+  OrderView:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/OrderItemDetail'
+        type: array
+      order:
+        $ref: '#/definitions/Order'
+    type: object
+  PaymentConfirmInput:
+    properties:
+      order_id:
+        type: string
+      success:
+        type: boolean
+    required:
+    - order_id
     type: object
   PaymentStatus:
     enum:
@@ -243,162 +417,6 @@ definitions:
     x-enum-varnames:
     - UserRoleUser
     - UserRoleAdmin
-  domain.BookFilter:
-    properties:
-      authorIDs:
-        items:
-          type: string
-        type: array
-      categoryIDs:
-        items:
-          type: string
-        type: array
-      ids:
-        items:
-          type: string
-        type: array
-      isActive:
-        type: boolean
-      maxPrice:
-        format: float64
-        type: number
-      minPrice:
-        format: float64
-        type: number
-      minStock:
-        type: integer
-      publisherIDs:
-        items:
-          type: string
-        type: array
-      search:
-        description: name / author / isbn
-        type: string
-    type: object
-  domain.BookInput:
-    properties:
-      author_id:
-        type: string
-      author_name:
-        type: string
-      available_stock:
-        type: integer
-      category_ids:
-        items:
-          type: string
-        type: array
-      description:
-        type: string
-      discount_percentage:
-        type: number
-      image_url:
-        type: string
-      is_active:
-        type: boolean
-      isbn:
-        type: string
-      name:
-        type: string
-      price:
-        type: number
-      publisher_id:
-        type: string
-    required:
-    - author_name
-    - name
-    - publisher_id
-    type: object
-  domain.BookSearchResult:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/Book'
-        type: array
-      limit:
-        type: integer
-      offset:
-        type: integer
-      total:
-        type: integer
-    type: object
-  domain.CartItemDetail:
-    properties:
-      author_name:
-        type: string
-      book_id:
-        type: string
-      count:
-        type: integer
-      image_url:
-        type: string
-      line_total:
-        type: number
-      name:
-        type: string
-      unit_price:
-        type: number
-    type: object
-  domain.CartItemInput:
-    properties:
-      book_id:
-        type: string
-      count:
-        minimum: 1
-        type: integer
-    required:
-    - book_id
-    - count
-    type: object
-  domain.CartView:
-    properties:
-      cart_id:
-        type: string
-      items:
-        items:
-          $ref: '#/definitions/domain.CartItemDetail'
-        type: array
-      subtotal:
-        type: number
-      total_items:
-        type: integer
-      user_id:
-        type: string
-    type: object
-  domain.Category:
-    properties:
-      created_at:
-        type: string
-      deleted_at:
-        type: string
-      id:
-        type: string
-      name:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  domain.CheckoutInput:
-    properties:
-      payment_method:
-        $ref: '#/definitions/domain.PaymentMethod'
-    required:
-    - payment_method
-    type: object
-  domain.OrderItemDetail:
-    properties:
-      book_id:
-        type: string
-      count:
-        type: integer
-      image_url:
-        type: string
-      line_total:
-        type: number
-      name:
-        type: string
-      unit_price:
-        type: number
-    type: object
   domain.OrderStatus:
     enum:
     - PENDING
@@ -409,24 +427,6 @@ definitions:
     - OrderPending
     - OrderCancelled
     - OrderCompleted
-  domain.OrderView:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/domain.OrderItemDetail'
-        type: array
-      order:
-        $ref: '#/definitions/Order'
-    type: object
-  domain.PaymentConfirmInput:
-    properties:
-      order_id:
-        type: string
-      success:
-        type: boolean
-    required:
-    - order_id
-    type: object
   domain.PaymentMethod:
     enum:
     - COD
@@ -475,7 +475,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/domain.OrderView'
+              $ref: '#/definitions/OrderView'
             type: array
         "500":
           description: Internal Server Error
@@ -826,6 +826,10 @@ paths:
         in: query
         name: offset
         type: integer
+      - description: Search by author name
+        in: query
+        name: search
+        type: string
       produces:
       - application/json
       responses:
@@ -945,7 +949,7 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/domain.BookInput'
+          $ref: '#/definitions/BookInput'
       produces:
       - application/json
       responses:
@@ -1023,14 +1027,14 @@ paths:
         in: body
         name: payload
         schema:
-          $ref: '#/definitions/domain.BookFilter'
+          $ref: '#/definitions/BookFilter'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.BookSearchResult'
+            $ref: '#/definitions/BookSearchResult'
         "400":
           description: Bad Request
           schema:
@@ -1055,7 +1059,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.CartView'
+            $ref: '#/definitions/CartView'
         "401":
           description: Unauthorized
           schema:
@@ -1113,14 +1117,14 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/domain.CartItemInput'
+          $ref: '#/definitions/CartItemInput'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.CartView'
+            $ref: '#/definitions/CartView'
         "400":
           description: Bad Request
           schema:
@@ -1148,14 +1152,14 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/domain.CartItemInput'
+          $ref: '#/definitions/CartItemInput'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.CartView'
+            $ref: '#/definitions/CartView'
         "400":
           description: Bad Request
           schema:
@@ -1188,7 +1192,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.CartView'
+            $ref: '#/definitions/CartView'
         "400":
           description: Bad Request
           schema:
@@ -1225,7 +1229,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/domain.OrderView'
+              $ref: '#/definitions/OrderView'
             type: array
         "401":
           description: Unauthorized
@@ -1255,14 +1259,14 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/domain.CheckoutInput'
+          $ref: '#/definitions/CheckoutInput'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/domain.OrderView'
+            $ref: '#/definitions/OrderView'
         "400":
           description: Bad Request
           schema:
@@ -1291,14 +1295,14 @@ paths:
         name: payload
         required: true
         schema:
-          $ref: '#/definitions/domain.PaymentConfirmInput'
+          $ref: '#/definitions/PaymentConfirmInput'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/domain.OrderView'
+            $ref: '#/definitions/OrderView'
         "400":
           description: Bad Request
           schema:

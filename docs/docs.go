@@ -65,7 +65,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/domain.OrderView"
+                                "$ref": "#/definitions/OrderView"
                             }
                         }
                     },
@@ -611,6 +611,12 @@ const docTemplate = `{
                         "description": "Result offset",
                         "name": "offset",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search by author name",
+                        "name": "search",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -797,7 +803,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.BookInput"
+                            "$ref": "#/definitions/BookInput"
                         }
                     }
                 ],
@@ -866,7 +872,7 @@ const docTemplate = `{
                         "name": "payload",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/domain.BookFilter"
+                            "$ref": "#/definitions/BookFilter"
                         }
                     }
                 ],
@@ -874,7 +880,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.BookSearchResult"
+                            "$ref": "#/definitions/BookSearchResult"
                         }
                     },
                     "400": {
@@ -964,7 +970,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.CartView"
+                            "$ref": "#/definitions/CartView"
                         }
                     },
                     "401": {
@@ -1059,7 +1065,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.CartItemInput"
+                            "$ref": "#/definitions/CartItemInput"
                         }
                     }
                 ],
@@ -1067,7 +1073,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.CartView"
+                            "$ref": "#/definitions/CartView"
                         }
                     },
                     "400": {
@@ -1114,7 +1120,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.CartItemInput"
+                            "$ref": "#/definitions/CartItemInput"
                         }
                     }
                 ],
@@ -1122,7 +1128,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.CartView"
+                            "$ref": "#/definitions/CartView"
                         }
                     },
                     "400": {
@@ -1174,7 +1180,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.CartView"
+                            "$ref": "#/definitions/CartView"
                         }
                     },
                     "400": {
@@ -1233,7 +1239,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/domain.OrderView"
+                                "$ref": "#/definitions/OrderView"
                             }
                         }
                     },
@@ -1283,7 +1289,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.CheckoutInput"
+                            "$ref": "#/definitions/CheckoutInput"
                         }
                     }
                 ],
@@ -1291,7 +1297,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/domain.OrderView"
+                            "$ref": "#/definitions/OrderView"
                         }
                     },
                     "400": {
@@ -1340,7 +1346,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/domain.PaymentConfirmInput"
+                            "$ref": "#/definitions/PaymentConfirmInput"
                         }
                     }
                 ],
@@ -1348,7 +1354,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/domain.OrderView"
+                            "$ref": "#/definitions/OrderView"
                         }
                     },
                     "400": {
@@ -1847,7 +1853,7 @@ const docTemplate = `{
                 "categories": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.Category"
+                        "$ref": "#/definitions/Category"
                     }
                 },
                 "created_at": {
@@ -1888,6 +1894,218 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "BookFilter": {
+            "type": "object",
+            "properties": {
+                "authorIDs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "categoryIDs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "maxPrice": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "minPrice": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "minStock": {
+                    "type": "integer"
+                },
+                "publisherIDs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "search": {
+                    "description": "name / author / isbn",
+                    "type": "string"
+                }
+            }
+        },
+        "BookInput": {
+            "type": "object",
+            "required": [
+                "author_name",
+                "name",
+                "publisher_id"
+            ],
+            "properties": {
+                "author_id": {
+                    "type": "string"
+                },
+                "author_name": {
+                    "type": "string"
+                },
+                "available_stock": {
+                    "type": "integer"
+                },
+                "category_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "description": {
+                    "type": "string"
+                },
+                "discount_percentage": {
+                    "type": "number"
+                },
+                "image_url": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "isbn": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price": {
+                    "type": "number"
+                },
+                "publisher_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "BookSearchResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Book"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "CartItemDetail": {
+            "type": "object",
+            "properties": {
+                "author_name": {
+                    "type": "string"
+                },
+                "book_id": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "image_url": {
+                    "type": "string"
+                },
+                "line_total": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "unit_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "CartItemInput": {
+            "type": "object",
+            "required": [
+                "book_id",
+                "count"
+            ],
+            "properties": {
+                "book_id": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
+        },
+        "CartView": {
+            "type": "object",
+            "properties": {
+                "cart_id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CartItemDetail"
+                    }
+                },
+                "subtotal": {
+                    "type": "number"
+                },
+                "total_items": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "Category": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "CheckoutInput": {
+            "type": "object",
+            "required": [
+                "payment_method"
+            ],
+            "properties": {
+                "payment_method": {
+                    "$ref": "#/definitions/domain.PaymentMethod"
                 }
             }
         },
@@ -1954,6 +2172,57 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "string"
+                }
+            }
+        },
+        "OrderItemDetail": {
+            "type": "object",
+            "properties": {
+                "book_id": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "image_url": {
+                    "type": "string"
+                },
+                "line_total": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "unit_price": {
+                    "type": "number"
+                }
+            }
+        },
+        "OrderView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/OrderItemDetail"
+                    }
+                },
+                "order": {
+                    "$ref": "#/definitions/Order"
+                }
+            }
+        },
+        "PaymentConfirmInput": {
+            "type": "object",
+            "required": [
+                "order_id"
+            ],
+            "properties": {
+                "order_id": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
                 }
             }
         },
@@ -2153,241 +2422,6 @@ const docTemplate = `{
                 "UserRoleAdmin"
             ]
         },
-        "domain.BookFilter": {
-            "type": "object",
-            "properties": {
-                "authorIDs": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "categoryIDs": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "isActive": {
-                    "type": "boolean"
-                },
-                "maxPrice": {
-                    "type": "number",
-                    "format": "float64"
-                },
-                "minPrice": {
-                    "type": "number",
-                    "format": "float64"
-                },
-                "minStock": {
-                    "type": "integer"
-                },
-                "publisherIDs": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "search": {
-                    "description": "name / author / isbn",
-                    "type": "string"
-                }
-            }
-        },
-        "domain.BookInput": {
-            "type": "object",
-            "required": [
-                "author_name",
-                "name",
-                "publisher_id"
-            ],
-            "properties": {
-                "author_id": {
-                    "type": "string"
-                },
-                "author_name": {
-                    "type": "string"
-                },
-                "available_stock": {
-                    "type": "integer"
-                },
-                "category_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "description": {
-                    "type": "string"
-                },
-                "discount_percentage": {
-                    "type": "number"
-                },
-                "image_url": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "isbn": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "price": {
-                    "type": "number"
-                },
-                "publisher_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "domain.BookSearchResult": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/Book"
-                    }
-                },
-                "limit": {
-                    "type": "integer"
-                },
-                "offset": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "domain.CartItemDetail": {
-            "type": "object",
-            "properties": {
-                "author_name": {
-                    "type": "string"
-                },
-                "book_id": {
-                    "type": "string"
-                },
-                "count": {
-                    "type": "integer"
-                },
-                "image_url": {
-                    "type": "string"
-                },
-                "line_total": {
-                    "type": "number"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "unit_price": {
-                    "type": "number"
-                }
-            }
-        },
-        "domain.CartItemInput": {
-            "type": "object",
-            "required": [
-                "book_id",
-                "count"
-            ],
-            "properties": {
-                "book_id": {
-                    "type": "string"
-                },
-                "count": {
-                    "type": "integer",
-                    "minimum": 1
-                }
-            }
-        },
-        "domain.CartView": {
-            "type": "object",
-            "properties": {
-                "cart_id": {
-                    "type": "string"
-                },
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/domain.CartItemDetail"
-                    }
-                },
-                "subtotal": {
-                    "type": "number"
-                },
-                "total_items": {
-                    "type": "integer"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "domain.Category": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "deleted_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "domain.CheckoutInput": {
-            "type": "object",
-            "required": [
-                "payment_method"
-            ],
-            "properties": {
-                "payment_method": {
-                    "$ref": "#/definitions/domain.PaymentMethod"
-                }
-            }
-        },
-        "domain.OrderItemDetail": {
-            "type": "object",
-            "properties": {
-                "book_id": {
-                    "type": "string"
-                },
-                "count": {
-                    "type": "integer"
-                },
-                "image_url": {
-                    "type": "string"
-                },
-                "line_total": {
-                    "type": "number"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "unit_price": {
-                    "type": "number"
-                }
-            }
-        },
         "domain.OrderStatus": {
             "type": "string",
             "enum": [
@@ -2400,34 +2434,6 @@ const docTemplate = `{
                 "OrderCancelled",
                 "OrderCompleted"
             ]
-        },
-        "domain.OrderView": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/domain.OrderItemDetail"
-                    }
-                },
-                "order": {
-                    "$ref": "#/definitions/Order"
-                }
-            }
-        },
-        "domain.PaymentConfirmInput": {
-            "type": "object",
-            "required": [
-                "order_id"
-            ],
-            "properties": {
-                "order_id": {
-                    "type": "string"
-                },
-                "success": {
-                    "type": "boolean"
-                }
-            }
         },
         "domain.PaymentMethod": {
             "type": "string",

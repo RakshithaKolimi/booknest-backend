@@ -43,13 +43,18 @@ func (r *authorRepo) FindByName(ctx context.Context, name string) (domain.Author
 	return author, err
 }
 
-func (r *authorRepo) List(ctx context.Context, limit, offset int) ([]domain.Author, error) {
+func (r *authorRepo) List(ctx context.Context, limit, offset int, search string) ([]domain.Author, error) {
 	var authors []domain.Author
 
-	err := r.gorm.WithContext(ctx).
+	query := r.gorm.WithContext(ctx).Model(&domain.Author{})
+	if search != "" {
+		query = query.Where("name ILIKE ?", "%"+search+"%")
+	}
+
+	err := query.
+		Order("LOWER(name) ASC").
 		Limit(limit).
 		Offset(offset).
-		Order("name ASC").
 		Find(&authors).Error
 
 	return authors, err

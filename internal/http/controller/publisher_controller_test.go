@@ -15,7 +15,7 @@ import (
 )
 
 type MockPublisherService struct {
-	ListFunc      func(ctx context.Context, limit, offset int) ([]domain.Publisher, error)
+	ListFunc      func(ctx context.Context, limit, offset int, search string) ([]domain.Publisher, error)
 	CreateFunc    func(ctx context.Context, in domain.PublisherInput) (*domain.Publisher, error)
 	UpdateFunc    func(ctx context.Context, id uuid.UUID, in domain.PublisherInput) (*domain.Publisher, error)
 	FindFunc      func(ctx context.Context, id uuid.UUID) (*domain.Publisher, error)
@@ -23,9 +23,9 @@ type MockPublisherService struct {
 	DeleteFunc    func(ctx context.Context, id uuid.UUID) error
 }
 
-func (m *MockPublisherService) List(ctx context.Context, limit, offset int) ([]domain.Publisher, error) {
+func (m *MockPublisherService) List(ctx context.Context, limit, offset int, search string) ([]domain.Publisher, error) {
 	if m.ListFunc != nil {
-		return m.ListFunc(ctx, limit, offset)
+		return m.ListFunc(ctx, limit, offset, search)
 	}
 	return []domain.Publisher{}, nil
 }

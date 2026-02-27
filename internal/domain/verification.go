@@ -16,6 +16,7 @@ const (
 	LoginOTP           VerificationTokenType = "LOGIN_OTP"
 )
 
+// VerificationToken defines model for VerificationToken
 type VerificationToken struct {
 	ID        uuid.UUID             `gorm:"type:uuid;primaryKey" db:"id" json:"id"`
 	UserID    uuid.UUID             `gorm:"type:uuid;index" db:"user_id" json:"user_id"`
@@ -27,7 +28,7 @@ type VerificationToken struct {
 	UsedAt   *time.Time        `db:"used_at" json:"used_at"`
 
 	BaseEntity
-}
+} // @name VerificationToken
 
 type VerificationTokenRepository interface {
 	FindByUserIDAndType(

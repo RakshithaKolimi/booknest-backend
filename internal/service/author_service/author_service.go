@@ -36,8 +36,9 @@ func (s *authorService) FindByID(
 func (s *authorService) List(
 	ctx context.Context,
 	limit, offset int,
+	search string,
 ) ([]domain.Author, error) {
-	return s.r.List(ctx, limit, offset)
+	return s.r.List(ctx, limit, offset, search)
 }
 
 func (s *authorService) Create(

@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -36,8 +37,9 @@ func (c *publisherController) RegisterRoutes(r gin.IRouter) {
 }
 
 func (c *publisherController) List(ctx *gin.Context) {
-	limit := 20
+	limit := 50
 	offset := 0
+	search := strings.TrimSpace(ctx.Query("search"))
 
 	if v := ctx.Query("limit"); v != "" {
 		limit, _ = strconv.Atoi(v)
@@ -46,7 +48,7 @@ func (c *publisherController) List(ctx *gin.Context) {
 		offset, _ = strconv.Atoi(v)
 	}
 
-	publishers, err := c.service.List(ctx, limit, offset)
+	publishers, err := c.service.List(ctx, limit, offset, search)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

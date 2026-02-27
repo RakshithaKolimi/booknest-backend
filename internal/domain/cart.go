@@ -28,11 +28,13 @@ type CartItem struct {
 	BaseEntity
 } // @name CartItem
 
+// CartItemInput defines input model for CartItem
 type CartItemInput struct {
 	BookID uuid.UUID `json:"book_id" binding:"required"`
 	Count  int       `json:"count" binding:"required,min=1"`
-}
+} // @name CartItemInput
 
+// CartItemDetail defines model for CartItemDetail
 type CartItemDetail struct {
 	BookID     uuid.UUID `json:"book_id"`
 	Name       string    `json:"name"`
@@ -41,22 +43,24 @@ type CartItemDetail struct {
 	UnitPrice  float64   `json:"unit_price"`
 	Count      int       `json:"count"`
 	LineTotal  float64   `json:"line_total"`
-}
+} // @name CartItemDetail
 
+// CartItemRecord defines model for CartItemRecord
 type CartItemRecord struct {
 	BookID         uuid.UUID
 	Count          int
 	UnitPrice      float64
 	AvailableStock int
-}
+} // @name CartItemRecord
 
+// CartView defines model for CartView
 type CartView struct {
 	CartID     uuid.UUID        `json:"cart_id"`
 	UserID     uuid.UUID        `json:"user_id"`
 	Items      []CartItemDetail `json:"items"`
 	Subtotal   float64          `json:"subtotal"`
 	TotalItems int              `json:"total_items"`
-}
+} // @name CartView
 
 type CartRepository interface {
 	GetOrCreateCart(ctx context.Context, userID uuid.UUID) (Cart, error)

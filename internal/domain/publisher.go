@@ -38,7 +38,7 @@ type PublisherInput struct {
 
 type PublisherRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (Publisher, error)
-	List(ctx context.Context, limit, offset int) ([]Publisher, error)
+	List(ctx context.Context, limit, offset int, search string) ([]Publisher, error)
 	Create(ctx context.Context, publisher *Publisher) error
 	Update(ctx context.Context, publisher *Publisher) error
 	SetActive(ctx context.Context, id uuid.UUID, active bool) error
@@ -46,7 +46,7 @@ type PublisherRepository interface {
 }
 type PublisherService interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Publisher, error)
-	List(ctx context.Context, limit, offset int) ([]Publisher, error)
+	List(ctx context.Context, limit, offset int, search string) ([]Publisher, error)
 	Create(ctx context.Context, input PublisherInput) (*Publisher, error)
 	Update(ctx context.Context, id uuid.UUID, input PublisherInput) (*Publisher, error)
 	SetActive(ctx context.Context, id uuid.UUID, active bool) error

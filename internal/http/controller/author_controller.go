@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -52,7 +53,7 @@ func (c *authorController) RegisterRoutes(r gin.IRouter) {
 func (c *authorController) Create(ctx *gin.Context) {
 	var input domain.AuthorInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Invalid input"})
 		return
 	}
 
@@ -72,13 +73,15 @@ func (c *authorController) Create(ctx *gin.Context) {
 // @Produce      json
 // @Param        limit   query  int  false  "Result limit"
 // @Param        offset  query  int  false  "Result offset"
+// @Param        search  query  string  false  "Search by author name"
 // @Success      200  {array}  domain.Author
 // @Failure      500  {object}  map[string]string
 // @Security     BearerAuth
 // @Router       /authors [get]
 func (c *authorController) List(ctx *gin.Context) {
-	limit := 20
+	limit := 50
 	offset := 0
+	search := strings.TrimSpace(ctx.Query("search"))
 
 	if v := ctx.Query("limit"); v != "" {
 		limit, _ = strconv.Atoi(v)
@@ -87,7 +90,7 @@ func (c *authorController) List(ctx *gin.Context) {
 		offset, _ = strconv.Atoi(v)
 	}
 
-	authors, err := c.service.List(ctx, limit, offset)
+	authors, err := c.service.List(ctx, limit, offset, search)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

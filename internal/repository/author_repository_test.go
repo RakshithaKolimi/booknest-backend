@@ -29,7 +29,7 @@ func TestAuthorRepo_CRUDAndList(t *testing.T) {
 	second := &domain.Author{ID: uuid.New(), Name: "Author B"}
 	require.NoError(t, repo.Create(ctx, second))
 
-	list, err := repo.List(ctx, 1, 0)
+	list, err := repo.List(ctx, 1, 0, "")
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	require.Equal(t, "Author A", list[0].Name)

@@ -14,7 +14,7 @@ import (
 type mockAuthorRepository struct {
 	findByIDFunc   func(ctx context.Context, id uuid.UUID) (domain.Author, error)
 	findByNameFunc func(ctx context.Context, name string) (domain.Author, error)
-	listFunc       func(ctx context.Context, limit, offset int) ([]domain.Author, error)
+	listFunc       func(ctx context.Context, limit, offset int, search string) ([]domain.Author, error)
 	createFunc     func(ctx context.Context, author *domain.Author) error
 	updateFunc     func(ctx context.Context, author *domain.Author) error
 	deleteFunc     func(ctx context.Context, id uuid.UUID) error
@@ -34,9 +34,9 @@ func (m *mockAuthorRepository) FindByName(ctx context.Context, name string) (dom
 	return domain.Author{}, gorm.ErrRecordNotFound
 }
 
-func (m *mockAuthorRepository) List(ctx context.Context, limit, offset int) ([]domain.Author, error) {
+func (m *mockAuthorRepository) List(ctx context.Context, limit, offset int, search string) ([]domain.Author, error) {
 	if m.listFunc != nil {
-		return m.listFunc(ctx, limit, offset)
+		return m.listFunc(ctx, limit, offset, search)
 	}
 	return []domain.Author{}, nil
 }
@@ -162,9 +162,9 @@ func TestAuthorReadAndDeletePassThrough(t *testing.T) {
 		findByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.Author, error) {
 			return expected, nil
 		},
-		listFunc: func(ctx context.Context, limit, offset int) ([]domain.Author, error) {
-			if limit != 5 || offset != 10 {
-				t.Fatalf("unexpected pagination: %d/%d", limit, offset)
+		listFunc: func(ctx context.Context, limit, offset int, search string) ([]domain.Author, error) {
+			if limit != 5 || offset != 10 || search != "test" {
+				t.Fatalf("unexpected list params: %d/%d %q", limit, offset, search)
 			}
 			return []domain.Author{expected}, nil
 		},
@@ -182,7 +182,7 @@ func TestAuthorReadAndDeletePassThrough(t *testing.T) {
 		t.Fatalf("unexpected find result: %+v, err=%v", author, err)
 	}
 
-	list, err := svc.List(context.Background(), 5, 10)
+	list, err := svc.List(context.Background(), 5, 10, "test")
 	if err != nil || len(list) != 1 {
 		t.Fatalf("unexpected list result: %+v, err=%v", list, err)
 	}

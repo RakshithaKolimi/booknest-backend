@@ -61,8 +61,9 @@ type BookInput struct {
 	DiscountPercentage float64     `json:"discount_percentage"`
 	PublisherID        uuid.UUID   `json:"publisher_id" binding:"required"`
 	CategoryIDs        []uuid.UUID `json:"category_ids,omitempty"`
-}
+} // @name BookInput
 
+// BookFilter defines filter model for Book
 type BookFilter struct {
 	Search       *string // name / author / isbn
 	MinPrice     *float64
@@ -73,14 +74,15 @@ type BookFilter struct {
 	PublisherIDs []uuid.UUID
 	CategoryIDs  []uuid.UUID
 	MinStock     *int
-}
+} // @name BookFilter
 
+// BookSearchResult defines model for BookSearchResult
 type BookSearchResult struct {
 	Items  []Book `json:"items"`
 	Total  int64  `json:"total"`
 	Limit  uint64 `json:"limit"`
 	Offset uint64 `json:"offset"`
-}
+} // @name BookSearchResult
 
 type BookRepository interface {
 	Create(ctx context.Context, book *Book) error

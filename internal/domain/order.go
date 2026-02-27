@@ -32,6 +32,7 @@ type OrderItem struct {
 	BaseEntity
 } // @name OrderItem
 
+// OrderItemDetail defines model for OrderItemDetail
 type OrderItemDetail struct {
 	BookID     uuid.UUID `json:"book_id"`
 	Name       string    `json:"name"`
@@ -39,21 +40,24 @@ type OrderItemDetail struct {
 	UnitPrice  float64   `json:"unit_price"`
 	Count      int       `json:"count"`
 	LineTotal  float64   `json:"line_total"`
-}
+} // @name OrderItemDetail
 
+// OrderView defines model for OrderView
 type OrderView struct {
 	Order Order             `json:"order"`
 	Items []OrderItemDetail `json:"items"`
-}
+} // @name OrderView
 
+// CheckoutInput defines input model for Checkout
 type CheckoutInput struct {
 	PaymentMethod PaymentMethod `json:"payment_method" binding:"required"`
-}
+} // @name CheckoutInput
 
+// PaymentConfirmInput defines input model for PaymentConfirm
 type PaymentConfirmInput struct {
 	OrderID uuid.UUID `json:"order_id" binding:"required"`
 	Success bool      `json:"success"`
-}
+} // @name PaymentConfirmInput
 
 type OrderRepository interface {
 	CreateOrder(ctx context.Context, order *Order) error

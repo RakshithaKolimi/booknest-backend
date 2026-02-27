@@ -45,13 +45,21 @@ func (r *publisherRepo) FindByID(
 func (r *publisherRepo) List(
 	ctx context.Context,
 	limit, offset int,
+	search string,
 ) ([]domain.Publisher, error) {
 	var publishers []domain.Publisher
-	err := r.gorm.WithContext(ctx).
-		Where("deleted_at IS NULL").
+
+	query := r.gorm.WithContext(ctx).
+		Where("deleted_at IS NULL")
+	if search != "" {
+		like := "%" + search + "%"
+		query = query.Where("(trading_name ILIKE ? OR legal_name ILIKE ?)", like, like)
+	}
+
+	err := query.
+		Order("LOWER(trading_name) ASC").
 		Limit(limit).
 		Offset(offset).
-		Order("created_at DESC").
 		Find(&publishers).Error
 	return publishers, err
 }

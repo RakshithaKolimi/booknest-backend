@@ -54,7 +54,7 @@ func (c *categoryController) Create(ctx *gin.Context) {
 }
 
 func (c *categoryController) List(ctx *gin.Context) {
-	limit := 20
+	limit := 500
 	offset := 0
 
 	if v := ctx.Query("limit"); v != "" {
