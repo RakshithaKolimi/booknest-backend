@@ -93,7 +93,7 @@ func TestCategoryControllerCreateAndGetByID(t *testing.T) {
 func TestCategoryControllerListDefaults(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	svc := &mockCategoryService{listFunc: func(ctx context.Context, limit, offset int) ([]domain.Category, error) {
-		if limit != 20 || offset != 0 {
+		if limit != 500 || offset != 0 {
 			t.Fatalf("expected defaults 20/0, got %d/%d", limit, offset)
 		}
 		return []domain.Category{}, nil
