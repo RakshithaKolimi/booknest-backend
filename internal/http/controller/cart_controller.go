@@ -7,8 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"booknest/internal/domain"
-	"booknest/internal/http/routes"
-	"booknest/internal/middleware"
 )
 
 type cartController struct {
@@ -20,15 +18,7 @@ func NewCartController(service domain.CartService) domain.CartController {
 }
 
 func (c *cartController) RegisterRoutes(r gin.IRouter) {
-	protected := r.Group("")
-	protected.Use(middleware.JWTAuthMiddleware())
-	{
-		protected.GET(routes.CartRoute, c.GetCart)
-		protected.POST(routes.CartItemsRoute, c.AddItem)
-		protected.PUT(routes.CartItemsRoute, c.UpdateItem)
-		protected.DELETE(routes.CartItemRoute, c.RemoveItem)
-		protected.POST(routes.CartClearRoute, c.ClearCart)
-	}
+	RegisterCartRoutes(r, getJWTConfig(), c)
 }
 
 // GetCart godoc

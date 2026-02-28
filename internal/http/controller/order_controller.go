@@ -7,8 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"booknest/internal/domain"
-	"booknest/internal/http/routes"
-	"booknest/internal/middleware"
 )
 
 type orderController struct {
@@ -20,19 +18,7 @@ func NewOrderController(service domain.OrderService) domain.OrderController {
 }
 
 func (c *orderController) RegisterRoutes(r gin.IRouter) {
-	protected := r.Group("")
-	protected.Use(middleware.JWTAuthMiddleware())
-	{
-		protected.POST(routes.OrderCheckoutRoute, c.Checkout)
-		protected.POST(routes.OrderConfirmRoute, c.ConfirmPayment)
-		protected.GET(routes.OrdersRoute, c.ListMyOrders)
-	}
-
-	admin := r.Group("")
-	admin.Use(middleware.JWTAuthMiddleware(), middleware.RequireAdmin())
-	{
-		admin.GET(routes.AdminOrdersRoute, c.ListAllOrders)
-	}
+	RegisterOrderRoutes(r, getJWTConfig(), c)
 }
 
 // Checkout godoc

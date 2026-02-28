@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 
 	"booknest/internal/domain"
-	"booknest/internal/middleware"
 )
 
 type bookController struct {
@@ -20,20 +19,7 @@ func NewBookController(service domain.BookService) domain.BookController {
 }
 
 func (c *bookController) RegisterRoutes(r gin.IRouter) {
-	public := r.Group("/books")
-	{
-		public.POST("/filter", c.filterBooks)
-		public.GET("/:id", c.getBook)
-		public.GET("", c.listBooks)
-	}
-
-	admin := r.Group("/books")
-	admin.Use(middleware.JWTAuthMiddleware(), middleware.RequireAdmin())
-	{
-		admin.POST("", c.createBook)
-		admin.PUT("/:id", c.updateBook)
-		admin.DELETE("/:id", c.deleteBook)
-	}
+	RegisterBookRoutes(r, getJWTConfig(), c)
 }
 
 // createBook godoc

@@ -8,8 +8,6 @@ import (
 	"github.com/google/uuid"
 
 	"booknest/internal/domain"
-	"booknest/internal/http/routes"
-	"booknest/internal/middleware"
 )
 
 type categoryController struct {
@@ -21,20 +19,7 @@ func NewCategoryController(service domain.CategoryService) domain.CategoryContro
 }
 
 func (c *categoryController) RegisterRoutes(r gin.IRouter) {
-	protected := r.Group("")
-	protected.Use(middleware.JWTAuthMiddleware())
-	{
-		protected.GET(routes.CategoriesRoute, c.List)
-		protected.GET(routes.CategoryByIDRoute, c.GetByID)
-	}
-
-	admin := r.Group("")
-	admin.Use(middleware.JWTAuthMiddleware(), middleware.RequireAdmin())
-	{
-		admin.POST(routes.CategoriesRoute, c.Create)
-		admin.PUT(routes.CategoryByIDRoute, c.Update)
-		admin.DELETE(routes.CategoryByIDRoute, c.Delete)
-	}
+	RegisterCategoryRoutes(r, getJWTConfig(), c)
 }
 
 func (c *categoryController) Create(ctx *gin.Context) {

@@ -80,11 +80,7 @@ func (s userService) generateTokenHash(rawToken string) string {
 
 func (s userService) generateJWT(user domain.User) (string, error) {
 	// Generate JWT token for the user
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		// Backward-compatible env key used in older local setups.
-		secret = os.Getenv("JWT_AUTH_SECRET")
-	}
+	secret := os.Getenv("JWT_SECRET_V1")
 	if secret == "" {
 		secret = "booknest_secret" // fallback for local dev
 	}
@@ -100,6 +96,8 @@ func (s userService) generateJWT(user domain.User) (string, error) {
 
 	// Create the token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token.Header["kid"] = domain.CurrentKeyID
+
 	// Sign the token with the secret
 	return token.SignedString([]byte(secret))
 }

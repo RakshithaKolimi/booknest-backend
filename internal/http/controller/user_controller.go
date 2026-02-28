@@ -8,8 +8,6 @@ import (
 	"github.com/google/uuid"
 
 	"booknest/internal/domain"
-	"booknest/internal/http/routes"
-	"booknest/internal/middleware"
 )
 
 type userController struct {
@@ -23,25 +21,7 @@ func NewUserController(service domain.UserService) domain.UserController {
 
 // RegisterRoutes registers all user routes
 func (c *userController) RegisterRoutes(r gin.IRouter) {
-	auth := r.Group("")
-	{
-		auth.POST(routes.RegisterRoute, c.Register)
-		auth.POST(routes.LoginRoute, c.Login)
-		auth.POST(routes.ForgotPassword, c.ForgotPassword)
-		auth.POST(routes.ResetPasswordByToken, c.ResetPasswordWithToken)
-	}
-
-	protected := r.Group("")
-	protected.Use(middleware.JWTAuthMiddleware())
-	{
-		protected.GET(routes.UserRoute, c.GetUser)
-		protected.DELETE(routes.UserRoute, c.DeleteUser)
-		protected.POST(routes.VerifyEmailRoute, c.VerifyEmail)
-		protected.POST(routes.VerifyMobileRoute, c.VerifyMobile)
-		protected.POST(routes.ResendEmailRoute, c.ResendEmailVerification)
-		protected.POST(routes.ResendMobileOTPRoute, c.ResendMobileOTP)
-		protected.POST(routes.ResetPasswordRoute, c.ResetPassword)
-	}
+	RegisterUserRoutes(r, getJWTConfig(), c)
 }
 
 // Register godoc

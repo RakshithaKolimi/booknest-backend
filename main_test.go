@@ -15,6 +15,7 @@ import (
 func TestSetupServer_Success(t *testing.T) {
 	t.Setenv("SWAGGER_USER", "swagger")
 	t.Setenv("SWAGGER_PASSWORD", "swagger-pass")
+	t.Setenv("JWT_SECRET_V1", "jwt_secret")
 
 	originalConnectGORM := connectGORM
 	t.Cleanup(func() {
@@ -59,6 +60,7 @@ func TestSetupServer_ConnectGORMError(t *testing.T) {
 func TestSetupServer_VersionedRoutingAndSwaggerV1(t *testing.T) {
 	t.Setenv("SWAGGER_USER", "swagger")
 	t.Setenv("SWAGGER_PASSWORD", "swagger-pass")
+	t.Setenv("JWT_SECRET_V1", "jwt_secret")
 
 	originalConnectGORM := connectGORM
 	t.Cleanup(func() {

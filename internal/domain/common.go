@@ -2,6 +2,9 @@ package domain
 
 import "time"
 
+var CurrentKeyID = "JWT_SECRET_V1"
+var PrevKeyID = "JWT_SECRET_V0"
+
 // BaseEntity defines model for BaseEntity
 type BaseEntity struct {
 	CreatedAt time.Time  `json:"created_at" db:"created_at"`

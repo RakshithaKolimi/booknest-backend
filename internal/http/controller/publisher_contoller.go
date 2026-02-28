@@ -9,8 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	"booknest/internal/domain"
-	"booknest/internal/http/routes"
-	"booknest/internal/middleware"
 )
 
 type publisherController struct {
@@ -24,16 +22,7 @@ func NewPublisherController(service domain.PublisherService) domain.PublisherCon
 
 // RegisterRoutes registers all publisher routes
 func (c *publisherController) RegisterRoutes(r gin.IRouter) {
-	protected := r.Group("")
-	protected.Use(middleware.JWTAuthMiddleware())
-	{
-		protected.GET(routes.PublisherRoute, c.List)
-		protected.POST(routes.PublisherRoute, c.Create)
-		protected.GET(routes.PublisherByIDRoute, c.GetByID)
-		protected.PUT(routes.PublisherByIDRoute, c.Update)
-		protected.PATCH(routes.PublisherStatusRoute, c.SetActive)
-		protected.DELETE(routes.PublisherByIDRoute, c.Delete)
-	}
+	RegisterPublisherRoutes(r, getJWTConfig(), c)
 }
 
 func (c *publisherController) List(ctx *gin.Context) {

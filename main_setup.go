@@ -73,6 +73,12 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 		return nil, fmt.Errorf("gorm db handle: %w", err)
 	}
 
+	jwtConfig, err := middleware.LoadJWTConfigFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("load jwt config: %w", err)
+	}
+	controller.SetJWTConfig(jwtConfig)
+
 	userRepo := repository.NewUserRepo(dbpool, gormdb)
 	vtRepo := repository.NewVerificationRepo(dbpool, gormdb)
 	txm := util.NewTransactionManager(dbpool)

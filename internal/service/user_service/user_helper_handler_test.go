@@ -273,7 +273,7 @@ func TestGenerateTokenHash_Success(t *testing.T) {
 
 // TestGenerateJWT_Success tests successful JWT generation
 func TestGenerateJWT_Success(t *testing.T) {
-	os.Setenv("JWT_SECRET", "test_secret_key")
+	os.Setenv("JWT_SECRET_V1", "test_secret_key")
 	service := &userService{}
 	userID := uuid.New()
 
@@ -315,7 +315,7 @@ func TestGenerateJWT_Success(t *testing.T) {
 
 // TestGenerateJWT_DefaultSecret tests JWT generation uses default secret when env var is missing
 func TestGenerateJWT_DefaultSecret(t *testing.T) {
-	os.Unsetenv("JWT_SECRET")
+	os.Unsetenv("JWT_SECRET_V1")
 	service := &userService{}
 	userID := uuid.New()
 
@@ -349,7 +349,7 @@ func TestGenerateJWT_DefaultSecret(t *testing.T) {
 
 // TestGenerateJWT_ExpirationTime tests JWT has correct expiration time
 func TestGenerateJWT_ExpirationTime(t *testing.T) {
-	os.Setenv("JWT_SECRET", "test_secret_key")
+	os.Setenv("JWT_SECRET_V1", "test_secret_key")
 	service := &userService{}
 	user := domain.User{
 		ID:    uuid.New(),

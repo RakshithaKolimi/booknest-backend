@@ -9,8 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	"booknest/internal/domain"
-	"booknest/internal/http/routes"
-	"booknest/internal/middleware"
 )
 
 type authorController struct {
@@ -22,20 +20,7 @@ func NewAuthorController(service domain.AuthorService) domain.AuthorController {
 }
 
 func (c *authorController) RegisterRoutes(r gin.IRouter) {
-	protected := r.Group("")
-	protected.Use(middleware.JWTAuthMiddleware())
-	{
-		protected.GET(routes.AuthorsRoute, c.List)
-		protected.GET(routes.AuthorByIDRoute, c.GetByID)
-	}
-
-	admin := r.Group("")
-	admin.Use(middleware.JWTAuthMiddleware(), middleware.RequireAdmin())
-	{
-		admin.POST(routes.AuthorsRoute, c.Create)
-		admin.PUT(routes.AuthorByIDRoute, c.Update)
-		admin.DELETE(routes.AuthorByIDRoute, c.Delete)
-	}
+	RegisterAuthorRoutes(r, getJWTConfig(), c)
 }
 
 // Create godoc
