@@ -14,6 +14,7 @@ const (
 	VerificationMobile VerificationTokenType = "MOBILE_VERIFICATION"
 	PasswordReset      VerificationTokenType = "PASSWORD_RESET"
 	LoginOTP           VerificationTokenType = "LOGIN_OTP"
+	RefreshToken       VerificationTokenType = "REFRESH_TOKEN"
 )
 
 // VerificationToken defines model for VerificationToken

@@ -12,6 +12,7 @@ func RegisterUserRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, controlle
 	{
 		auth.POST(routes.RegisterRoute, controller.Register)
 		auth.POST(routes.LoginRoute, controller.Login)
+		auth.POST(routes.RefreshRoute, controller.Refresh)
 		auth.POST(routes.ForgotPassword, controller.ForgotPassword)
 		auth.POST(routes.ResetPasswordByToken, controller.ResetPasswordWithToken)
 	}

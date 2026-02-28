@@ -6,12 +6,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"booknest/internal/domain"
@@ -90,7 +92,7 @@ func (s userService) generateJWT(user domain.User) (string, error) {
 		"user_id":   user.ID.String(),
 		"user_role": user.Role,
 		"email":     user.Email,
-		"exp":       time.Now().Add(24 * time.Hour).Unix(),
+		"exp":       time.Now().Add(15 * time.Minute).Unix(),
 		"iat":       time.Now().Unix(),
 	}
 
@@ -161,4 +163,99 @@ func (s *userService) sendEmailVerification(email string, token domain.Verificat
 
 func (s *userService) sendMobileVerification(mobile, otp string) {
 	slog.Debug("Sending OTP...", "mobile:", mobile, "otp:", otp)
+}
+
+func (s userService) generateRefreshToken(user domain.User) (string, error) {
+	// Generate JWT token for the user
+	secret := os.Getenv("JWT_REFRESH_V1")
+	if secret == "" {
+		secret = "booknest_refresh_secret" // fallback for local dev
+	}
+
+	// Create JWT claims
+	claims := jwt.MapClaims{
+		"user_id":   user.ID.String(),
+		"user_role": user.Role,
+		"email":     user.Email,
+		"exp":       time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"iat":       time.Now().Unix(),
+	}
+
+	// Create the token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token.Header["kid"] = domain.CurrentRefreshKeyID
+
+	// Sign the token with the secret
+	return token.SignedString([]byte(secret))
+}
+
+func (s userService) verifyRefreshJWT(rawToken string) (jwt.MapClaims, error) {
+	// Generate key maps
+	keys := map[string][]byte{
+		domain.PrevRefreshKeyID:    []byte(os.Getenv(domain.PrevRefreshKeyID)),
+		domain.CurrentRefreshKeyID: []byte(os.Getenv(domain.CurrentRefreshKeyID)),
+	}
+
+	// Check if the key exsists
+	hasKey := false
+	for _, key := range keys {
+		if len(key) > 0 {
+			hasKey = true
+			break
+		}
+	}
+	// If not, set the key to default
+	if !hasKey {
+		keys[domain.CurrentRefreshKeyID] = []byte("booknest_refresh_secret")
+	}
+
+	// Parse the token
+	token, err := jwt.Parse(rawToken, func(token *jwt.Token) (interface{}, error) {
+		// verify token signature
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+
+		// Get the key id
+		kid, ok := token.Header["kid"].(string)
+		if !ok {
+			return nil, errors.New("missing kid")
+		}
+
+		// Get the key
+		key, exists := keys[kid]
+		if !exists || len(key) == 0 {
+			return nil, fmt.Errorf("invalid refresh token key id")
+		}
+
+		// return the key
+		return key, nil
+	})
+	if err != nil || !token.Valid {
+		return nil, errors.New("invalid refresh token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("invalid refresh token claims")
+	}
+
+	return claims, nil
+}
+
+func (s userService) userIDFromClaims(claims jwt.MapClaims) (uuid.UUID, error) {
+	// Get user id dtring from claims
+	userIDRaw, ok := claims["user_id"].(string)
+	if !ok || userIDRaw == "" {
+		return uuid.Nil, errors.New("missing user id")
+	}
+
+	// Parse into uuid
+	userID, err := uuid.Parse(userIDRaw)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	// return userID
+	return userID, nil
 }

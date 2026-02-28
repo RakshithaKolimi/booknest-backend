@@ -19,7 +19,8 @@ import (
 type MockUserService struct {
 	FindUserFunc                func(ctx context.Context, id uuid.UUID) (domain.User, error)
 	RegisterFunc                func(ctx context.Context, in domain.UserInput) error
-	LoginFunc                   func(ctx context.Context, in domain.LoginInput) (string, error)
+	LoginFunc                   func(ctx context.Context, in domain.LoginInput) (domain.AuthTokens, error)
+	RefreshFunc                 func(ctx context.Context, rawRefreshToken string) (string, error)
 	ForgotPasswordFunc          func(ctx context.Context, in domain.ForgotPasswordInput) (string, error)
 	ResetPasswordFunc           func(ctx context.Context, userID uuid.UUID, newPassword string) error
 	ResetPasswordWithTokenFunc  func(ctx context.Context, rawToken, newPassword string) error
@@ -45,9 +46,16 @@ func (m *MockUserService) Register(ctx context.Context, in domain.UserInput) err
 	return errors.New("not implemented")
 }
 
-func (m *MockUserService) Login(ctx context.Context, in domain.LoginInput) (string, error) {
+func (m *MockUserService) Login(ctx context.Context, in domain.LoginInput) (domain.AuthTokens, error) {
 	if m.LoginFunc != nil {
 		return m.LoginFunc(ctx, in)
+	}
+	return domain.AuthTokens{}, errors.New("not implemented")
+}
+
+func (m *MockUserService) Refresh(ctx context.Context, rawRefreshToken string) (string, error) {
+	if m.RefreshFunc != nil {
+		return m.RefreshFunc(ctx, rawRefreshToken)
 	}
 	return "", errors.New("not implemented")
 }
@@ -112,8 +120,11 @@ func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
 func TestLogin_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mockService := &MockUserService{
-		LoginFunc: func(ctx context.Context, in domain.LoginInput) (string, error) {
-			return "valid.jwt.token", nil
+		LoginFunc: func(ctx context.Context, in domain.LoginInput) (domain.AuthTokens, error) {
+			return domain.AuthTokens{
+				AccessToken:  "valid.access.token",
+				RefreshToken: "valid.refresh.token",
+			}, nil
 		},
 	}
 
@@ -139,8 +150,11 @@ func TestLogin_Success(t *testing.T) {
 
 	var response map[string]interface{}
 	_ = json.Unmarshal(w.Body.Bytes(), &response)
-	if response["token"] != "valid.jwt.token" {
-		t.Fatalf("expected token in response")
+	if response["access_token"] != "valid.access.token" {
+		t.Fatalf("expected access_token in response")
+	}
+	if response["refresh_token"] != "valid.refresh.token" {
+		t.Fatalf("expected refresh_token in response")
 	}
 }
 
@@ -148,8 +162,8 @@ func TestLogin_Success(t *testing.T) {
 func TestLogin_InvalidCredentials(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	mockService := &MockUserService{
-		LoginFunc: func(ctx context.Context, in domain.LoginInput) (string, error) {
-			return "", errors.New("invalid credentials")
+		LoginFunc: func(ctx context.Context, in domain.LoginInput) (domain.AuthTokens, error) {
+			return domain.AuthTokens{}, errors.New("invalid credentials")
 		},
 	}
 
@@ -195,6 +209,90 @@ func TestLogin_MissingEmailAndMobile(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestRefresh_Success(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := &MockUserService{
+		RefreshFunc: func(ctx context.Context, rawRefreshToken string) (string, error) {
+			if rawRefreshToken != "old.refresh.token" {
+				t.Fatalf("unexpected refresh token: %s", rawRefreshToken)
+			}
+			return "new.access.token", nil
+		},
+	}
+
+	controller := NewUserController(mockService)
+	router := gin.New()
+	controller.RegisterRoutes(router)
+
+	input := map[string]string{
+		"refresh_token": "old.refresh.token",
+	}
+	body, _ := json.Marshal(input)
+	req := httptest.NewRequest("POST", "/refresh", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
+	if response["access_token"] != "new.access.token" {
+		t.Fatalf("expected access_token in response")
+	}
+	if _, ok := response["refresh_token"]; ok {
+		t.Fatalf("did not expect refresh_token in response")
+	}
+}
+
+func TestRefresh_InvalidPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	controller := NewUserController(&MockUserService{})
+	router := gin.New()
+	controller.RegisterRoutes(router)
+
+	// missing refresh_token field
+	req := httptest.NewRequest("POST", "/refresh", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestRefresh_InvalidToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := &MockUserService{
+		RefreshFunc: func(ctx context.Context, rawRefreshToken string) (string, error) {
+			return "", errors.New("invalid refresh token")
+		},
+	}
+
+	controller := NewUserController(mockService)
+	router := gin.New()
+	controller.RegisterRoutes(router)
+
+	input := map[string]string{
+		"refresh_token": "bad.refresh.token",
+	}
+	body, _ := json.Marshal(input)
+	req := httptest.NewRequest("POST", "/refresh", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
 	}
 }
 

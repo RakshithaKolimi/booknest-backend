@@ -15,6 +15,7 @@ const (
 
 	ForgotPassword       = "/forgot-password"
 	LoginRoute           = "/login"
+	RefreshRoute         = "/refresh"
 	RegisterRoute        = "/register"
 	VerifyEmailRoute     = "/verify-email"
 	VerifyMobileRoute    = "/verify-mobile"

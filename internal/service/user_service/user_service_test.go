@@ -37,7 +37,11 @@ func TestFindUser_Success(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	user, err := service.FindUser(context.Background(), userID)
 
 	if err != nil {
@@ -57,7 +61,11 @@ func TestFindUser_NotFound(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	_, err := service.FindUser(context.Background(), uuid.New())
 
 	if err == nil {
@@ -86,20 +94,24 @@ func TestLogin_SuccessByEmail(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	input := domain.LoginInput{
 		Email:    "test@example.com",
 		Password: password,
 	}
 
-	token, err := service.Login(context.Background(), input)
+	tokens, err := service.Login(context.Background(), input)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if token == "" {
-		t.Fatalf("expected non-empty token")
+	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
+		t.Fatalf("expected non-empty access and refresh tokens")
 	}
 }
 
@@ -124,20 +136,24 @@ func TestLogin_SuccessByMobile(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	input := domain.LoginInput{
 		Mobile:   "1234567890",
 		Password: password,
 	}
 
-	token, err := service.Login(context.Background(), input)
+	tokens, err := service.Login(context.Background(), input)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if token == "" {
-		t.Fatalf("expected non-empty token")
+	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
+		t.Fatalf("expected non-empty access and refresh tokens")
 	}
 }
 
@@ -158,7 +174,11 @@ func TestLogin_InvalidPassword(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	input := domain.LoginInput{
 		Email:    "test@example.com",
 		Password: "wrongpassword",
@@ -183,7 +203,11 @@ func TestLogin_UserNotFound(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	input := domain.LoginInput{
 		Email:    "nonexistent@example.com",
 		Password: "password123",
@@ -221,19 +245,23 @@ func TestLogin_UpdatesLastLogin(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	input := domain.LoginInput{
 		Email:    "test@example.com",
 		Password: password,
 	}
 
-	token, err := service.Login(context.Background(), input)
+	tokens, err := service.Login(context.Background(), input)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if token == "" {
-		t.Fatalf("expected non-empty token")
+	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
+		t.Fatalf("expected non-empty access and refresh tokens")
 	}
 
 	if !updateCalled {
@@ -267,7 +295,11 @@ func TestDeleteUser_Success(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	err := service.DeleteUser(context.Background(), userID)
 
 	if err != nil {
@@ -287,7 +319,11 @@ func TestDeleteUser_NotFound(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	err := service.DeleteUser(context.Background(), uuid.New())
 
 	if err == nil {
@@ -380,7 +416,11 @@ func TestLogin_PrefersEmailOverMobile(t *testing.T) {
 		},
 	}
 
-	service := &userService{r: mockUserRepo}
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   mockUserRepo,
+		vtr: &MockVerificationTokenRepository{},
+	}
 	input := domain.LoginInput{
 		Email:    "test@example.com",
 		Mobile:   "1234567890",
@@ -703,5 +743,246 @@ func TestResendMobileOTP_CreatesNewOTPToken(t *testing.T) {
 	}
 	if created != 1 {
 		t.Fatalf("expected one token creation, got %d", created)
+	}
+}
+
+func TestLogin_InvalidatesAndStoresRefreshToken(t *testing.T) {
+	t.Setenv("JWT_SECRET_V1", "access-secret")
+	t.Setenv("JWT_REFRESH_V1", "refresh-secret")
+
+	userID := uuid.New()
+	password := "password123"
+	updateCalled := false
+	invalidated := false
+	created := false
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByEmailFunc: func(ctx context.Context, email string) (domain.User, error) {
+				return domain.User{
+					ID:       userID,
+					Email:    email,
+					Password: (&userService{}).hashPassword(password),
+					Role:     domain.UserRoleUser,
+				}, nil
+			},
+			UpdateFunc: func(ctx context.Context, user *domain.User) error {
+				updateCalled = true
+				if user.LastLogin == nil {
+					t.Fatalf("expected last_login to be updated")
+				}
+				return nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{
+			InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
+				invalidated = true
+				if id != userID || tokenType != domain.RefreshToken {
+					t.Fatalf("unexpected invalidation args")
+				}
+				return nil
+			},
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				created = true
+				if token.UserID != userID || token.Type != domain.RefreshToken {
+					t.Fatalf("unexpected refresh token record")
+				}
+				if token.TokenHash == "" {
+					t.Fatalf("expected hashed refresh token to be stored")
+				}
+				return nil
+			},
+		},
+	}
+
+	tokens, err := service.Login(context.Background(), domain.LoginInput{
+		Email:    "user@test.com",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("expected login success, got %v", err)
+	}
+	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
+		t.Fatalf("expected access and refresh tokens")
+	}
+	if !updateCalled || !invalidated || !created {
+		t.Fatalf("expected update=%v invalidate=%v create=%v", updateCalled, invalidated, created)
+	}
+}
+
+func TestLogin_ReturnsErrorWhenRefreshInvalidationFails(t *testing.T) {
+	userID := uuid.New()
+	password := "password123"
+	createCalled := false
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByEmailFunc: func(ctx context.Context, email string) (domain.User, error) {
+				return domain.User{
+					ID:       userID,
+					Email:    email,
+					Password: (&userService{}).hashPassword(password),
+					Role:     domain.UserRoleUser,
+				}, nil
+			},
+			UpdateFunc: func(ctx context.Context, user *domain.User) error { return nil },
+		},
+		vtr: &MockVerificationTokenRepository{
+			InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
+				return errors.New("invalidation failed")
+			},
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				createCalled = true
+				return nil
+			},
+		},
+	}
+
+	_, err := service.Login(context.Background(), domain.LoginInput{
+		Email:    "user@test.com",
+		Password: password,
+	})
+	if err == nil {
+		t.Fatalf("expected error when invalidation fails")
+	}
+	if createCalled {
+		t.Fatalf("did not expect refresh token create when invalidation fails")
+	}
+}
+
+func TestLogin_ReturnsErrorWhenRefreshCreateFails(t *testing.T) {
+	userID := uuid.New()
+	password := "password123"
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByEmailFunc: func(ctx context.Context, email string) (domain.User, error) {
+				return domain.User{
+					ID:       userID,
+					Email:    email,
+					Password: (&userService{}).hashPassword(password),
+					Role:     domain.UserRoleUser,
+				}, nil
+			},
+			UpdateFunc: func(ctx context.Context, user *domain.User) error { return nil },
+		},
+		vtr: &MockVerificationTokenRepository{
+			InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
+				return nil
+			},
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				return errors.New("create failed")
+			},
+		},
+	}
+
+	_, err := service.Login(context.Background(), domain.LoginInput{
+		Email:    "user@test.com",
+		Password: password,
+	})
+	if err == nil {
+		t.Fatalf("expected error when refresh token create fails")
+	}
+}
+
+func TestRefresh_Success_RotatesToken(t *testing.T) {
+	t.Setenv("JWT_SECRET_V1", "access-secret")
+	t.Setenv("JWT_REFRESH_V1", "refresh-secret")
+
+	user := domain.User{
+		ID:    uuid.New(),
+		Email: "user@test.com",
+		Role:  domain.UserRoleUser,
+	}
+
+	rawRefreshToken, err := (&userService{}).generateRefreshToken(user)
+	if err != nil {
+		t.Fatalf("failed to create refresh token for test: %v", err)
+	}
+	tokenHash := (&userService{}).generateTokenHash(rawRefreshToken)
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+				if id != user.ID {
+					t.Fatalf("unexpected user id")
+				}
+				return user, nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{
+			FindByHashAndTypeFunc: func(ctx context.Context, hash string, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
+				if hash != tokenHash || tokenType != domain.RefreshToken {
+					t.Fatalf("unexpected hash lookup")
+				}
+				return &domain.VerificationToken{
+					ID:        uuid.New(),
+					UserID:    user.ID,
+					Type:      domain.RefreshToken,
+					TokenHash: hash,
+					ExpiresAt: time.Now().Add(time.Hour),
+					}, nil
+				},
+		},
+	}
+
+	accessToken, err := service.Refresh(context.Background(), rawRefreshToken)
+	if err != nil {
+		t.Fatalf("expected refresh success, got %v", err)
+	}
+	if accessToken == "" {
+		t.Fatalf("expected access token")
+	}
+}
+
+func TestRefresh_InvalidWhenStoredUserMismatch(t *testing.T) {
+	t.Setenv("JWT_REFRESH_V1", "refresh-secret")
+
+	user := domain.User{
+		ID:    uuid.New(),
+		Email: "user@test.com",
+		Role:  domain.UserRoleUser,
+	}
+	rawRefreshToken, err := (&userService{}).generateRefreshToken(user)
+	if err != nil {
+		t.Fatalf("failed to create refresh token for test: %v", err)
+	}
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   &MockUserRepository{},
+		vtr: &MockVerificationTokenRepository{
+			FindByHashAndTypeFunc: func(ctx context.Context, hash string, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
+				return &domain.VerificationToken{
+					ID:        uuid.New(),
+					UserID:    uuid.New(),
+					Type:      domain.RefreshToken,
+					TokenHash: hash,
+					ExpiresAt: time.Now().Add(time.Hour),
+				}, nil
+			},
+		},
+	}
+
+	_, err = service.Refresh(context.Background(), rawRefreshToken)
+	if err == nil || err.Error() != "invalid refresh token" {
+		t.Fatalf("expected invalid refresh token error, got %v", err)
+	}
+}
+
+func TestRefresh_InvalidWhenTokenMalformed(t *testing.T) {
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r:   &MockUserRepository{},
+		vtr: &MockVerificationTokenRepository{},
+	}
+
+	_, err := service.Refresh(context.Background(), "not-a-jwt")
+	if err == nil || err.Error() != "invalid refresh token" {
+		t.Fatalf("expected invalid refresh token error, got %v", err)
 	}
 }

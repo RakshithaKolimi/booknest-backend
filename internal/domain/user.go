@@ -47,6 +47,11 @@ type LoginInput struct {
 	Password string `json:"password" binding:"required"`
 } // @name LoginInput
 
+type AuthTokens struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+} // @name AuthTokens
+
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	FindByID(ctx context.Context, id uuid.UUID) (User, error)
@@ -59,7 +64,8 @@ type UserRepository interface {
 type UserService interface {
 	FindUser(ctx context.Context, id uuid.UUID) (User, error)
 	Register(ctx context.Context, in UserInput) error
-	Login(ctx context.Context, in LoginInput) (token string, err error)
+	Login(ctx context.Context, in LoginInput) (tokens AuthTokens, err error)
+	Refresh(ctx context.Context, rawRefreshToken string) (accessToken string, err error)
 	ForgotPassword(ctx context.Context, in ForgotPasswordInput) (string, error)
 	ResetPassword(ctx context.Context, userID uuid.UUID, newPassword string) error
 	ResetPasswordWithToken(ctx context.Context, rawToken, newPassword string) error

@@ -109,7 +109,7 @@ func (s *userService) Register(
 func (s *userService) Login(
 	ctx context.Context,
 	in domain.LoginInput,
-) (string, error) {
+) (domain.AuthTokens, error) {
 
 	var user domain.User
 	var err error
@@ -121,25 +121,115 @@ func (s *userService) Login(
 		user, err = s.r.FindByMobile(ctx, in.Mobile)
 	}
 	if err != nil {
-		return "", err
+		return domain.AuthTokens{}, err
 	}
 
 	// Validate the password
 	if !s.comparePassword(user.Password, in.Password) {
-		return "", errors.New("invalid credentials")
+		return domain.AuthTokens{}, errors.New("invalid credentials")
 	}
 
-	// Update last login
-	now := time.Now()
-	user.LastLogin = &now
+	var tokens domain.AuthTokens
+	err = s.txm.InTransaction(ctx, func(txCtx context.Context) error {
+		// Update last login
+		now := time.Now()
+		user.LastLogin = &now
+		if err := s.r.Update(txCtx, &user); err != nil {
+			return err
+		}
 
-	// Update user
-	if err := s.r.Update(ctx, &user); err != nil {
+		// Rotate old refresh tokens on every fresh login.
+		if err := s.vtr.InvalidateByUserAndType(txCtx, user.ID, domain.RefreshToken); err != nil {
+			return err
+		}
+
+		// Get the access token
+		accessToken, err := s.generateJWT(user)
+		if err != nil {
+			return err
+		}
+
+		// Get refresh token
+		refreshToken, err := s.generateRefreshToken(user)
+		if err != nil {
+			return err
+		}
+
+		// Add refresh token to verification token table
+		refreshTokenRecord := &domain.VerificationToken{
+			UserID:    user.ID,
+			Type:      domain.RefreshToken,
+			TokenHash: s.generateTokenHash(refreshToken),
+			ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		}
+		if err := s.vtr.Create(txCtx, refreshTokenRecord); err != nil {
+			return err
+		}
+
+		// Return the Tokens
+		tokens = domain.AuthTokens{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+		}
+		return nil
+	})
+	if err != nil {
+		return domain.AuthTokens{}, err
+	}
+	return tokens, nil
+}
+
+func (s *userService) Refresh(
+	ctx context.Context,
+	rawRefreshToken string,
+) (string, error) {
+	// Verify the refresh token
+	claims, err := s.verifyRefreshJWT(rawRefreshToken)
+	if err != nil {
+		return "", errors.New("invalid refresh token")
+	}
+
+	// get user ID
+	userID, err := s.userIDFromClaims(claims)
+	if err != nil {
+		return "", errors.New("invalid refresh token")
+	}
+
+	// Generate Token
+	tokenHash := s.generateTokenHash(rawRefreshToken)
+	var accessToken string
+
+	err = s.txm.InTransaction(ctx, func(txCtx context.Context) error {
+		// Get the token from hash
+		storedToken, err := s.vtr.FindByHashAndType(txCtx, tokenHash, domain.RefreshToken)
+		if err != nil {
+			return errors.New("invalid refresh token")
+		}
+
+		// If user ID mismatches, return error
+		if storedToken.UserID != userID {
+			return errors.New("invalid refresh token")
+		}
+
+		// Find the user by ID
+		user, err := s.r.FindByID(txCtx, userID)
+		if err != nil {
+			return err
+		}
+
+		// Generate a new access token
+		generatedAccessToken, err := s.generateJWT(user)
+		if err != nil {
+			return err
+		}
+		accessToken = generatedAccessToken
+		return nil
+	})
+	if err != nil {
 		return "", err
 	}
 
-	// Generate JWT token
-	return s.generateJWT(user)
+	return accessToken, nil
 }
 
 func (s *userService) ForgotPassword(

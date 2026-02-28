@@ -372,11 +372,124 @@ func TestGenerateJWT_ExpirationTime(t *testing.T) {
 	exp := int64(claims["exp"].(float64))
 	expTime := time.Unix(exp, 0)
 
-	expectedExpiration := afterGeneration.Add(24 * time.Hour)
+	expectedExpiration := afterGeneration.Add(15 * time.Minute)
 	diffSeconds := expTime.Sub(expectedExpiration).Seconds()
 
 	if diffSeconds < -1 || diffSeconds > 1 {
-		t.Fatalf("expected expiration in ~24 hours, got difference of %v seconds", diffSeconds)
+		t.Fatalf("expected expiration in ~15 minutes, got difference of %v seconds", diffSeconds)
+	}
+}
+
+func TestGenerateRefreshToken_Success(t *testing.T) {
+	t.Setenv("JWT_REFRESH_V1", "refresh-secret")
+	service := &userService{}
+	userID := uuid.New()
+
+	user := domain.User{
+		ID:    userID,
+		Email: "refresh@example.com",
+		Role:  domain.UserRoleUser,
+	}
+
+	token, err := service.generateRefreshToken(user)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if token == "" {
+		t.Fatalf("expected non-empty token")
+	}
+
+	parsed, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+		if token.Header["kid"] != domain.CurrentRefreshKeyID {
+			t.Fatalf("expected refresh kid %s, got %v", domain.CurrentRefreshKeyID, token.Header["kid"])
+		}
+		return []byte("refresh-secret"), nil
+	})
+	if err != nil || !parsed.Valid {
+		t.Fatalf("expected valid refresh token, got err=%v valid=%v", err, parsed != nil && parsed.Valid)
+	}
+}
+
+func TestVerifyRefreshJWT_Success(t *testing.T) {
+	t.Setenv("JWT_REFRESH_V1", "refresh-secret")
+	service := &userService{}
+	user := domain.User{
+		ID:    uuid.New(),
+		Email: "refresh@example.com",
+		Role:  domain.UserRoleUser,
+	}
+
+	raw, err := service.generateRefreshToken(user)
+	if err != nil {
+		t.Fatalf("generateRefreshToken failed: %v", err)
+	}
+
+	claims, err := service.verifyRefreshJWT(raw)
+	if err != nil {
+		t.Fatalf("expected verify success, got %v", err)
+	}
+	if claims["user_id"] != user.ID.String() {
+		t.Fatalf("expected user_id claim to match")
+	}
+}
+
+func TestVerifyRefreshJWT_UsesFallbackSecret(t *testing.T) {
+	os.Unsetenv("JWT_REFRESH_V1")
+	os.Unsetenv("JWT_REFRESH_V0")
+
+	service := &userService{}
+	user := domain.User{
+		ID:    uuid.New(),
+		Email: "refresh@example.com",
+		Role:  domain.UserRoleUser,
+	}
+
+	raw, err := service.generateRefreshToken(user)
+	if err != nil {
+		t.Fatalf("generateRefreshToken failed: %v", err)
+	}
+
+	if _, err := service.verifyRefreshJWT(raw); err != nil {
+		t.Fatalf("expected fallback verify success, got %v", err)
+	}
+}
+
+func TestVerifyRefreshJWT_InvalidKid(t *testing.T) {
+	t.Setenv("JWT_REFRESH_V1", "refresh-secret")
+	service := &userService{}
+
+	claims := jwt.MapClaims{
+		"user_id": uuid.New().String(),
+		"exp":     time.Now().Add(time.Hour).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	token.Header["kid"] = "UNKNOWN_REFRESH_KID"
+
+	raw, err := token.SignedString([]byte("refresh-secret"))
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+
+	if _, err := service.verifyRefreshJWT(raw); err == nil {
+		t.Fatalf("expected invalid kid error")
+	}
+}
+
+func TestUserIDFromClaims(t *testing.T) {
+	service := &userService{}
+	userID := uuid.New()
+
+	got, err := service.userIDFromClaims(jwt.MapClaims{"user_id": userID.String()})
+	if err != nil || got != userID {
+		t.Fatalf("expected parsed user id, got %v err=%v", got, err)
+	}
+
+	if _, err := service.userIDFromClaims(jwt.MapClaims{}); err == nil {
+		t.Fatalf("expected error when user_id is missing")
+	}
+
+	if _, err := service.userIDFromClaims(jwt.MapClaims{"user_id": "bad-uuid"}); err == nil {
+		t.Fatalf("expected error for invalid UUID")
 	}
 }
 

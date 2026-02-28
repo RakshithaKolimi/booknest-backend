@@ -79,15 +79,48 @@ func (c *userController) Login(ctx *gin.Context) {
 		return
 	}
 
-	token, err := c.service.Login(ctx, input)
+	tokens, err := c.service.Login(ctx, input)
 	if err != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"token":   token,
-		"message": "Login successful",
+		"access_token":  tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
+		"message":       "Login successful",
+	})
+}
+
+// Refresh godoc
+// @Summary      Refresh access token
+// @Description  Exchanges a valid refresh token for a new access token
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        payload  body  map[string]string  true  "Refresh token payload"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Router       /auth/refresh [post]
+func (c *userController) Refresh(ctx *gin.Context) {
+	var input struct {
+		RefreshToken string `json:"refresh_token" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	accessToken, err := c.service.Refresh(ctx, input.RefreshToken)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"access_token": accessToken,
 	})
 }
 
