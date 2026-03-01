@@ -138,9 +138,13 @@ func (s *userService) Login(
 			return err
 		}
 
-		// Rotate old refresh tokens on every fresh login.
-		if err := s.vtr.InvalidateByUserAndType(txCtx, user.ID, domain.RefreshToken); err != nil {
-			return err
+		// Check if the old refresh token exists
+		if _, err := s.vtr.FindByUserIDAndType(ctx, user.ID, domain.RefreshToken); err == nil {
+			// Rotate old refresh tokens on every fresh login.
+			if err := s.vtr.InvalidateByUserAndType(txCtx, user.ID, domain.RefreshToken); err != nil {
+				return err
+
+			}
 		}
 
 		// Get the access token

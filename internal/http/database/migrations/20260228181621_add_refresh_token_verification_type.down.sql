@@ -1,0 +1,2 @@
+-- Enum value additions are irreversible in PostgreSQL.
+-- No rollback provided.

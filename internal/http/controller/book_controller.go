@@ -85,7 +85,7 @@ func (c *bookController) getBook(ctx *gin.Context) {
 // @Failure      500  {object}  map[string]string
 // @Router       /books [get]
 func (c *bookController) listBooks(ctx *gin.Context) {
-	limit := 10
+	limit := 500
 	offset := 0
 
 	books, err := c.service.ListBooks(ctx, limit, offset)
