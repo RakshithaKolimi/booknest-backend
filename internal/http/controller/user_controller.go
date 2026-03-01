@@ -21,7 +21,7 @@ func NewUserController(service domain.UserService) domain.UserController {
 
 // RegisterRoutes registers all user routes
 func (c *userController) RegisterRoutes(r gin.IRouter) {
-	RegisterUserRoutes(r, getJWTConfig(), c)
+	RegisterUserRoutes(r, getJWTConfig(), getRedisClient(), c)
 }
 
 // Register godoc

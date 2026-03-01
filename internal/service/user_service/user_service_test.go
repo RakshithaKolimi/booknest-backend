@@ -775,12 +775,22 @@ func TestLogin_InvalidatesAndStoresRefreshToken(t *testing.T) {
 				return nil
 			},
 		},
-		vtr: &MockVerificationTokenRepository{
-			InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
-				invalidated = true
-				if id != userID || tokenType != domain.RefreshToken {
-					t.Fatalf("unexpected invalidation args")
-				}
+			vtr: &MockVerificationTokenRepository{
+				FindByUserIDAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
+					if id != userID || tokenType != domain.RefreshToken {
+						t.Fatalf("unexpected find refresh token args")
+					}
+					return &domain.VerificationToken{
+						ID:     uuid.New(),
+						UserID: userID,
+						Type:   domain.RefreshToken,
+					}, nil
+				},
+				InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
+					invalidated = true
+					if id != userID || tokenType != domain.RefreshToken {
+						t.Fatalf("unexpected invalidation args")
+					}
 				return nil
 			},
 			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
@@ -829,10 +839,17 @@ func TestLogin_ReturnsErrorWhenRefreshInvalidationFails(t *testing.T) {
 			},
 			UpdateFunc: func(ctx context.Context, user *domain.User) error { return nil },
 		},
-		vtr: &MockVerificationTokenRepository{
-			InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
-				return errors.New("invalidation failed")
-			},
+			vtr: &MockVerificationTokenRepository{
+				FindByUserIDAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
+					return &domain.VerificationToken{
+						ID:     uuid.New(),
+						UserID: userID,
+						Type:   domain.RefreshToken,
+					}, nil
+				},
+				InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
+					return errors.New("invalidation failed")
+				},
 			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
 				createCalled = true
 				return nil

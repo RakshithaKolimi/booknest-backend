@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis"
 	"github.com/jackc/pgx/v5/pgxpool"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -31,6 +34,39 @@ import (
 )
 
 var connectGORM = database.ConnectGORM
+
+func initRedisClient() (*redis.Client, error) {
+	// Get Redis host address
+	addr := strings.TrimSpace(os.Getenv("REDIS_ADDR"))
+	if addr == "" {
+		return nil, nil
+	}
+
+	// Get DB from env file
+	db := 0
+	if rawDB := strings.TrimSpace(os.Getenv("REDIS_DB")); rawDB != "" {
+		parsed, err := strconv.Atoi(rawDB)
+		if err != nil {
+			return nil, fmt.Errorf("parse REDIS_DB: %w", err)
+		}
+		db = parsed
+	}
+
+	// Get a new client
+	client := redis.NewClient(&redis.Options{
+		Addr:     addr,
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       db,
+	})
+
+	// Ping the redis DB
+	if err := client.Ping().Err(); err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("ping redis at %s: %w", addr, err)
+	}
+
+	return client, nil
+}
 
 func useCORSMiddleware(allowedOrigins map[string]bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -79,6 +115,18 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	}
 	controller.SetJWTConfig(jwtConfig)
 
+	// Initialise redis
+	redisClient, err := initRedisClient()
+	if err != nil {
+		return nil, fmt.Errorf("init redis: %w", err)
+	}
+
+	// Add redis client
+	controller.SetRedisClient(redisClient)
+	if redisClient == nil {
+		log.Println("redis not configured (REDIS_ADDR empty); using in-memory login rate limiter")
+	}
+
 	userRepo := repository.NewUserRepo(dbpool, gormdb)
 	vtRepo := repository.NewVerificationRepo(dbpool, gormdb)
 	txm := util.NewTransactionManager(dbpool)
@@ -115,6 +163,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 		"http://localhost:5173": true,
 	}))
 	r.Use(gin.Recovery())
+	r.Use(middleware.RateLimitMiddleware())
 	r.Use(middleware.LoggingMiddleware())
 	r.Use(middleware.ErrorHandler())
 	r.GET(

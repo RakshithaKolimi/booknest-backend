@@ -2,13 +2,15 @@ package controller
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis"
 
 	"booknest/internal/http/routes"
 	"booknest/internal/middleware"
 )
 
-func RegisterUserRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, controller *userController) {
+func RegisterUserRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, rdb *redis.Client, controller *userController) {
 	auth := r.Group("")
+	auth.Use(middleware.LoginRateLimiter(rdb))
 	{
 		auth.POST(routes.RegisterRoute, controller.Register)
 		auth.POST(routes.LoginRoute, controller.Login)

@@ -71,12 +71,12 @@ func TestBookControllerGetAndList(t *testing.T) {
 			}
 			return &domain.Book{ID: id, Name: "Book"}, nil
 		},
-		listBooksFunc: func(ctx context.Context, limit, offset int) ([]domain.Book, error) {
-			if limit != 10 || offset != 0 {
-				t.Fatalf("expected defaults 10/0, got %d/%d", limit, offset)
-			}
-			return []domain.Book{{ID: id, Name: "Book"}}, nil
-		},
+			listBooksFunc: func(ctx context.Context, limit, offset int) ([]domain.Book, error) {
+				if limit != 500 || offset != 0 {
+					t.Fatalf("expected defaults 500/0, got %d/%d", limit, offset)
+				}
+				return []domain.Book{{ID: id, Name: "Book"}}, nil
+			},
 	}
 	ctl := NewBookController(svc).(*bookController)
 

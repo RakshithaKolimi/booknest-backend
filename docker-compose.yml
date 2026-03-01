@@ -7,6 +7,7 @@ services:
       - .env
     depends_on:
       - db
+      - redis
   
   db:
     image: "postgres:15"
@@ -16,6 +17,11 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: booknest
       POSTGRES_DB: booknest
+
+  redis:
+    image: "redis:7-alpine"
+    ports:
+      - "6379:6379"
 
 volumes:
   postgres_data:

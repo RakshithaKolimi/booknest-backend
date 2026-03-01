@@ -35,9 +35,14 @@ DB_URL=postgres://postgres:booknest@localhost:5432/booknest?sslmode=disable
 JWT_SECRET=booknest_secret
 SWAGGER_USER=booknest
 SWAGGER_PASSWORD=<your-password>
+JWT_SECRET_V1=
+JWT_REFRESH_V1=
+REDIS_ADDR=localhost:6379
+REDIS_PASSWORD=
+REDIS_DB=0
 ```
 
-Note: `JWT_AUTH_SECRET` is still supported for backward compatibility, but `JWT_SECRET` is the primary key.
+Note: `JWT_SECRET_V0` and `JWT_REFRESH_V0` is still supported for backward compatibility, but `JWT_SECRET_V1` and `JWT_REFRESH_V1`  are the primary keys.
 
 ## Run (Interview-Safe)
 
