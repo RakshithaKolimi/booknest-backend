@@ -177,6 +177,7 @@ func (r *bookRepository) FilterByCriteria(ctx context.Context, filter domain.Boo
 func (r *bookRepository) List(ctx context.Context, limit, offset int) ([]domain.Book, error) {
 	var books []domain.Book
 	err := r.db.WithContext(ctx).
+		Preload("Author").
 		Preload("Categories").
 		Limit(limit).
 		Offset(offset).

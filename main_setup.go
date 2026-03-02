@@ -162,6 +162,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 		"http://localhost:3000": true,
 		"http://localhost:5173": true,
 	}))
+	r.Use(middleware.SecurityHeaders())
 	r.Use(gin.Recovery())
 	r.Use(middleware.RateLimitMiddleware())
 	r.Use(middleware.LoggingMiddleware())

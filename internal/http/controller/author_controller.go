@@ -41,6 +41,10 @@ func (c *authorController) Create(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Invalid input"})
 		return
 	}
+	if err := sanitizeInput(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Invalid input"})
+		return
+	}
 
 	author, err := c.service.Create(ctx, input)
 	if err != nil {
@@ -120,6 +124,10 @@ func (c *authorController) Update(ctx *gin.Context) {
 
 	var input domain.AuthorInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := sanitizeInput(&input); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

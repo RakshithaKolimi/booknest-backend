@@ -24,3 +24,6 @@ vendor/
 
 # Cache
 .gocache
+
+# Debug Files
+__debug_bin*

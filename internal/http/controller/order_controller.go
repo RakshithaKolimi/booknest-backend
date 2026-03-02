@@ -45,6 +45,10 @@ func (c *orderController) Checkout(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := sanitizeInput(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	order, err := c.service.Checkout(ctx, userID, input)
 	if err != nil {
@@ -76,6 +80,10 @@ func (c *orderController) ConfirmPayment(ctx *gin.Context) {
 
 	var input domain.PaymentConfirmInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := sanitizeInput(&input); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

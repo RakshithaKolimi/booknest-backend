@@ -1,6 +1,5 @@
 package middleware
 
-
 import (
 	"log"
 	"time"
@@ -13,7 +12,7 @@ func LoggingMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
-		c.Next() 
+		c.Next()
 
 		latency := time.Since(start)
 		status := c.Writer.Status()
@@ -41,5 +40,15 @@ func ErrorHandler() gin.HandlerFunc {
 				"error": c.Errors.Last().Error(),
 			})
 		}
+	}
+}
+
+func SecurityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Prevents MIME sniffing.. i.e., e.g: the header context sayes text/plain but we find javascript
+		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
+		// Cannot be loaded under IFrame
+		c.Writer.Header().Set("X-Frame-Options", "DENY")
+		c.Next()
 	}
 }

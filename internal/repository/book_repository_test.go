@@ -67,6 +67,7 @@ func TestBookRepo_FindByIDAndList(t *testing.T) {
 	list, err := repo.List(ctx, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, list, 1)
+	require.Equal(t, authorID, list[0].Author.ID)
 	require.Len(t, list[0].Categories, 1)
 
 	found.Name = "Updated"

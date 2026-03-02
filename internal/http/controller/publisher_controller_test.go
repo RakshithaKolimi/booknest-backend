@@ -31,22 +31,37 @@ func (m *MockPublisherService) List(ctx context.Context, limit, offset int, sear
 }
 
 func (m *MockPublisherService) Create(ctx context.Context, in domain.PublisherInput) (*domain.Publisher, error) {
+	if m.CreateFunc == nil {
+		return &domain.Publisher{}, nil
+	}
 	return m.CreateFunc(ctx, in)
 }
 
 func (m *MockPublisherService) Update(ctx context.Context, id uuid.UUID, in domain.PublisherInput) (*domain.Publisher, error) {
+	if m.UpdateFunc == nil {
+		return &domain.Publisher{}, nil
+	}
 	return m.UpdateFunc(ctx, id, in)
 }
 
 func (m *MockPublisherService) FindByID(ctx context.Context, id uuid.UUID) (*domain.Publisher, error) {
+	if m.FindFunc == nil {
+		return &domain.Publisher{}, nil
+	}
 	return m.FindFunc(ctx, id)
 }
 
 func (m *MockPublisherService) SetActive(ctx context.Context, id uuid.UUID, active bool) error {
+	if m.SetActiveFunc == nil {
+		return nil
+	}
 	return m.SetActiveFunc(ctx, id, active)
 }
 
 func (m *MockPublisherService) Delete(ctx context.Context, id uuid.UUID) error {
+	if m.DeleteFunc == nil {
+		return nil
+	}
 	return m.DeleteFunc(ctx, id)
 }
 

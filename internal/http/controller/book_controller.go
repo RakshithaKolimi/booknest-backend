@@ -40,6 +40,10 @@ func (c *bookController) createBook(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := sanitizeInput(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	book, err := c.service.CreateBook(ctx, input)
 	if err != nil {
@@ -122,6 +126,10 @@ func (c *bookController) filterBooks(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := sanitizeInput(&filter); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	limit := uint64(10)
 	offset := uint64(0)
@@ -156,6 +164,10 @@ func (c *bookController) updateBook(ctx *gin.Context) {
 
 	var input domain.BookInput
 	if err := ctx.ShouldBindJSON(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := sanitizeInput(&input); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
