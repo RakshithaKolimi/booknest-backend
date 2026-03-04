@@ -65,23 +65,25 @@ type BookInput struct {
 
 // BookFilter defines filter model for Book
 type BookFilter struct {
-	Search       *string // name / author / isbn
-	MinPrice     *float64
-	MaxPrice     *float64
-	IsActive     *bool
-	IDs          []uuid.UUID
-	AuthorIDs    []uuid.UUID
-	PublisherIDs []uuid.UUID
-	CategoryIDs  []uuid.UUID
-	MinStock     *int
+	Search        *string     `json:"search,omitempty" form:"search"` // name / author / isbn
+	MinPrice      *float64    `json:"min_price,omitempty" form:"min_price"`
+	MaxPrice      *float64    `json:"max_price,omitempty" form:"max_price"`
+	IsActive      *bool       `json:"is_active,omitempty" form:"is_active"`
+	IDs           []uuid.UUID `json:"ids,omitempty" form:"ids"`
+	AuthorIDs     []uuid.UUID `json:"author_ids,omitempty" form:"author_ids"`
+	PublisherIDs  []uuid.UUID `json:"publisher_ids,omitempty" form:"publisher_ids"`
+	CategoryIDs   []uuid.UUID `json:"category_ids,omitempty" form:"category_ids"`
+	MinStock      *int        `json:"min_stock,omitempty" form:"min_stock"`
 } // @name BookFilter
 
 // BookSearchResult defines model for BookSearchResult
 type BookSearchResult struct {
-	Items  []Book `json:"items"`
-	Total  int64  `json:"total"`
-	Limit  uint64 `json:"limit"`
-	Offset uint64 `json:"offset"`
+	Items      []Book  `json:"items"`
+	Total      int64   `json:"total"`
+	Limit      uint64  `json:"limit"`
+	Offset     uint64  `json:"offset"`
+	NextCursor *string `json:"next_cursor,omitempty"`
+	HasMore    bool    `json:"has_more"`
 } // @name BookSearchResult
 
 type BookRepository interface {
@@ -90,6 +92,7 @@ type BookRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Book, error)
 	List(ctx context.Context, limit, offset int) ([]Book, error)
 	FilterByCriteria(ctx context.Context, filter BookFilter, pagination QueryOptions) ([]Book, int64, error)
+	QueryBooks(ctx context.Context, filter BookFilter, pagination QueryOptions) ([]Book, int64, *string, bool, error)
 	Update(ctx context.Context, book *Book) error
 	UpdateWithRelations(ctx context.Context, id uuid.UUID, input BookInput) (*Book, error)
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -100,6 +103,7 @@ type BookService interface {
 	GetBook(ctx context.Context, id uuid.UUID) (*Book, error)
 	ListBooks(ctx context.Context, limit, offset int) ([]Book, error)
 	FilterByCriteria(ctx context.Context, filter BookFilter, q QueryOptions) (*BookSearchResult, error)
+	QueryBooks(ctx context.Context, filter BookFilter, q QueryOptions) (*BookSearchResult, error)
 	UpdateBook(ctx context.Context, id uuid.UUID, input BookInput) (*Book, error)
 	DeleteBook(ctx context.Context, id uuid.UUID) error
 }

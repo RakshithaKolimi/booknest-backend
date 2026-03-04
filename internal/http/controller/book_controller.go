@@ -101,6 +101,79 @@ func (c *bookController) listBooks(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, books)
 }
 
+// queryBooks godoc
+// @Summary      Query books with filters and pagination
+// @Description  Supports offset and cursor based pagination with catalog filters
+// @Tags         Books
+// @Produce      json
+// @Param        limit           query  int     false  "Result limit (default 12, max 100)"
+// @Param        offset          query  int     false  "Result offset (offset mode)"
+// @Param        cursor          query  string  false  "Opaque cursor (cursor mode)"
+// @Success      200  {object}  domain.BookSearchResult
+// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /books/search [get]
+func (c *bookController) queryBooks(ctx *gin.Context) {
+	limit := uint64(12)
+	offset := uint64(0)
+	var cursor *string
+
+	// Get the limit from the params
+	if v := ctx.Query("limit"); v != "" {
+		parsed, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+			return
+		}
+		if parsed > 100 {
+			parsed = 100
+		}
+		limit = parsed
+	}
+
+	// Get the offset from the params
+	if v := ctx.Query("offset"); v != "" {
+		parsed, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid offset"})
+			return
+		}
+		offset = parsed
+	}
+
+	// Get the cursor from the params
+	if v := ctx.Query("cursor"); v != "" {
+		cursor = &v
+	}
+
+	// Get the filter input 
+	filter := domain.BookFilter{}
+	if err := ctx.ShouldBindQuery(&filter); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Sanitize the input
+	if err := sanitizeInput(&filter); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Call the service method
+	result, err := c.service.QueryBooks(
+		ctx,
+		filter,
+		domain.QueryOptions{Limit: limit, Offset: offset, Cursor: cursor},
+	)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Return the result
+	ctx.JSON(http.StatusOK, result)
+}
+
 // filterBooks godoc
 // @Summary      Filter books
 // @Description  Filters books by criteria and pagination

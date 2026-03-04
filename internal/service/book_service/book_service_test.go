@@ -15,6 +15,7 @@ type mockBookRepository struct {
 	findByIDFunc            func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
 	listFunc                func(ctx context.Context, limit, offset int) ([]domain.Book, error)
 	filterByCriteriaFunc    func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, error)
+	queryBooksFunc          func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, *string, bool, error)
 	updateWithRelationsFunc func(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error)
 	deleteFunc              func(ctx context.Context, id uuid.UUID) error
 }
@@ -49,6 +50,13 @@ func (m *mockBookRepository) FilterByCriteria(ctx context.Context, filter domain
 		return m.filterByCriteriaFunc(ctx, filter, pagination)
 	}
 	return []domain.Book{}, 0, nil
+}
+
+func (m *mockBookRepository) QueryBooks(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, *string, bool, error) {
+	if m.queryBooksFunc != nil {
+		return m.queryBooksFunc(ctx, filter, pagination)
+	}
+	return []domain.Book{}, 0, nil, false, nil
 }
 
 func (m *mockBookRepository) Update(ctx context.Context, book *domain.Book) error {

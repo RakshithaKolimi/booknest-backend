@@ -9,6 +9,7 @@ import (
 func RegisterBookRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, controller *bookController) {
 	public := r.Group("/books")
 	{
+		public.GET("/search", controller.queryBooks)
 		public.POST("/filter", controller.filterBooks)
 		public.GET("/:id", controller.getBook)
 		public.GET("", controller.listBooks)

@@ -75,6 +75,9 @@ func (m *mockBookRepository) List(ctx context.Context, limit, offset int) ([]dom
 func (m *mockBookRepository) FilterByCriteria(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, error) {
 	return nil, 0, nil
 }
+func (m *mockBookRepository) QueryBooks(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, *string, bool, error) {
+	return nil, 0, nil, false, nil
+}
 func (m *mockBookRepository) Update(ctx context.Context, book *domain.Book) error { return nil }
 func (m *mockBookRepository) UpdateWithRelations(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error) {
 	return nil, nil

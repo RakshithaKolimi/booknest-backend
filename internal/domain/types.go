@@ -17,5 +17,6 @@ type SortOptions struct {
 type QueryOptions struct {
 	Limit  uint64
 	Offset uint64
+	Cursor *string
 	Sort   *SortOptions
 } // @name QueryOptions

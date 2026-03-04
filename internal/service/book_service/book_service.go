@@ -49,6 +49,26 @@ func (s *bookService) FilterByCriteria(
 	}, nil
 }
 
+func (s *bookService) QueryBooks(
+	ctx context.Context,
+	filter domain.BookFilter,
+	q domain.QueryOptions,
+) (*domain.BookSearchResult, error) {
+	books, total, nextCursor, hasMore, err := s.repo.QueryBooks(ctx, filter, q)
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.BookSearchResult{
+		Items:      books,
+		Total:      total,
+		Limit:      q.Limit,
+		Offset:     q.Offset,
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
 func (s *bookService) UpdateBook(
 	ctx context.Context,
 	id uuid.UUID,

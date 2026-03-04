@@ -109,7 +109,11 @@ func TestBookQueryHelpers_FilterAndSort(t *testing.T) {
 
 	sqlText, args, err := q.PlaceholderFormat(sq.Dollar).ToSql()
 	require.NoError(t, err)
-	require.True(t, strings.Contains(sqlText, "book_categories bc ON bc.book_id = b.id"))
+	require.True(t, strings.Contains(sqlText, "book_categories bc_ids ON bc_ids.book_id = b.id"))
+	require.True(t, strings.Contains(sqlText, "a.name"))
+	require.True(t, strings.Contains(sqlText, "p.trading_name"))
+	require.True(t, strings.Contains(sqlText, "p.legal_name"))
+	require.True(t, strings.Contains(sqlText, "c_search.name"))
 	require.True(t, strings.Contains(sqlText, "b.price DESC"))
 	require.NotEmpty(t, args)
 

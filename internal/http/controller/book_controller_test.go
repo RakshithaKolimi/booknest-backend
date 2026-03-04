@@ -20,6 +20,7 @@ type mockBookServiceController struct {
 	getBookFunc         func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
 	listBooksFunc       func(ctx context.Context, limit, offset int) ([]domain.Book, error)
 	filterByCriteriaFun func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error)
+	queryBooksFunc      func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error)
 	updateBookFunc      func(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error)
 	deleteBookFunc      func(ctx context.Context, id uuid.UUID) error
 }
@@ -48,6 +49,12 @@ func (m *mockBookServiceController) FilterByCriteria(ctx context.Context, filter
 	}
 	return &domain.BookSearchResult{}, nil
 }
+func (m *mockBookServiceController) QueryBooks(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error) {
+	if m.queryBooksFunc != nil {
+		return m.queryBooksFunc(ctx, filter, q)
+	}
+	return &domain.BookSearchResult{}, nil
+}
 func (m *mockBookServiceController) UpdateBook(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error) {
 	if m.updateBookFunc != nil {
 		return m.updateBookFunc(ctx, id, input)
@@ -71,12 +78,12 @@ func TestBookControllerGetAndList(t *testing.T) {
 			}
 			return &domain.Book{ID: id, Name: "Book"}, nil
 		},
-			listBooksFunc: func(ctx context.Context, limit, offset int) ([]domain.Book, error) {
-				if limit != 500 || offset != 0 {
-					t.Fatalf("expected defaults 500/0, got %d/%d", limit, offset)
-				}
-				return []domain.Book{{ID: id, Name: "Book"}}, nil
-			},
+		listBooksFunc: func(ctx context.Context, limit, offset int) ([]domain.Book, error) {
+			if limit != 500 || offset != 0 {
+				t.Fatalf("expected defaults 500/0, got %d/%d", limit, offset)
+			}
+			return []domain.Book{{ID: id, Name: "Book"}}, nil
+		},
 	}
 	ctl := NewBookController(svc).(*bookController)
 
@@ -137,5 +144,41 @@ func TestBookControllerCreateValidation(t *testing.T) {
 	ctl.createBook(c)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestBookControllerQueryBooks(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &mockBookServiceController{
+		queryBooksFunc: func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error) {
+			if q.Limit != 12 {
+				t.Fatalf("expected default limit 12, got %d", q.Limit)
+			}
+			if q.Cursor == nil || *q.Cursor != "abc" {
+				t.Fatalf("expected cursor to be set")
+			}
+			return &domain.BookSearchResult{
+				Items:      []domain.Book{},
+				Total:      0,
+				Limit:      q.Limit,
+				Offset:     q.Offset,
+				NextCursor: nil,
+				HasMore:    false,
+			}, nil
+		},
+	}
+	ctl := NewBookController(svc).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(
+		http.MethodGet,
+		"/books/search?book_name=Harry&author_name=Rowling&cursor=abc",
+		nil,
+	)
+
+	ctl.queryBooks(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
