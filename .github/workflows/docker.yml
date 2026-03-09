@@ -32,4 +32,4 @@ jobs:
       - name: Push Docker image
         run: |
             OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-            docker push ghcr.io/$OWNER/booknest-platform:latest .
+            docker push ghcr.io/$OWNER/booknest-platform:latest
