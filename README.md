@@ -2,6 +2,8 @@
 
 Backend API for BookNest (Go + Gin + PostgreSQL + GORM/pgx).
 
+For the repo-wide production roadmap and interview-focused upgrade plan, see `../PRODUCTION_NEXT_STEPS.md`.
+
 ## Architecture
 
 - `main.go`, `main_setup.go`: bootstrap + dependency wiring
