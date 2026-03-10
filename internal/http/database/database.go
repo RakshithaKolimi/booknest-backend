@@ -16,6 +16,9 @@ import (
 var (
 	// allows test to inject mock behavior
 	newPgxPool = pgxpool.NewWithConfig
+	pingPgxPool = func(ctx context.Context, pool *pgxpool.Pool) error {
+		return pool.Ping(ctx)
+	}
 )
 
 func Connect() (*pgxpool.Pool, error) {
@@ -48,13 +51,13 @@ func Connect() (*pgxpool.Pool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := newPgxPool(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pgxpool: %w", err)
 	}
 
 	// Ping to verify connection
-	if err = pool.Ping(ctx); err != nil {
+	if err = pingPgxPool(ctx, pool); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 

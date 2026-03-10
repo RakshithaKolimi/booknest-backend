@@ -10,18 +10,23 @@ import (
 )
 
 func TestConnect_Success(t *testing.T) {
-	os.Setenv("DB_HOST", "localhost")
-	os.Setenv("DB_USER", "postgres")
-	os.Setenv("DB_PASSWORD", "test_password")
-	os.Setenv("DB_NAME", "booknest_test")
-	os.Setenv("DB_PORT", "5432")
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_USER", "postgres")
+	t.Setenv("DB_PASSWORD", "test_password")
+	t.Setenv("DB_NAME", "booknest_test")
+	t.Setenv("DB_PORT", "5432")
 
 	// mock function
 	original := newPgxPool
 	defer func() { newPgxPool = original }()
+	originalPing := pingPgxPool
+	defer func() { pingPgxPool = originalPing }()
 
 	newPgxPool = func(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool, error) {
 		return &pgxpool.Pool{}, nil
+	}
+	pingPgxPool = func(ctx context.Context, pool *pgxpool.Pool) error {
+		return nil
 	}
 
 	pool, err := Connect()
@@ -34,11 +39,11 @@ func TestConnect_Success(t *testing.T) {
 }
 
 func TestConnect_Fail_NewPool(t *testing.T) {
-	os.Setenv("DB_HOST", "localhost")
-	os.Setenv("DB_USER", "test_user")
-	os.Setenv("DB_PASSWORD", "test_password")
-	os.Setenv("DB_NAME", "test_db")
-	os.Setenv("DB_PORT", "5432")
+	t.Setenv("DB_HOST", "localhost")
+	t.Setenv("DB_USER", "test_user")
+	t.Setenv("DB_PASSWORD", "test_password")
+	t.Setenv("DB_NAME", "test_db")
+	t.Setenv("DB_PORT", "5432")
 
 	original := newPgxPool
 	defer func() { newPgxPool = original }()
