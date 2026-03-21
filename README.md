@@ -9,6 +9,7 @@ Go backend for the BookNest bookstore platform. The service uses Gin for HTTP ro
 - Catalog management for books, authors, categories, and publishers
 - Cart and checkout flows
 - User and admin order views
+- Book reviews with purchase-based eligibility checks
 - Swagger UI protected by basic auth
 
 ## Project structure
@@ -79,6 +80,8 @@ go mod download
 make migrate-up
 ```
 
+If you recently pulled new changes, rerun `make migrate-up` before starting the API so newer tables such as `reviews` exist in your local database.
+
 ## Run the API
 
 ```bash
@@ -110,10 +113,16 @@ make doc
 The current frontend expects these routes under `/api/v1`:
 
 - Auth: `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/reset-password/confirm`
-- Books: `/books`, `/book/:id`
+- Books: `/books`, `/book/:id`, `/books/:id/reviews`
 - Cart: `/cart`, `/cart/items`, `/cart/items/:book_id`, `/cart/clear`
 - Orders: `/orders`, `/orders/checkout`, `/orders/confirm`, `/admin/orders`
 - Catalog admin: `/authors`, `/categories`, `/publishers`
+
+Review rules:
+
+- `GET /books/:id/reviews` is public and returns review items plus summary stats.
+- `POST /books/:id/reviews` requires authentication.
+- Only users with a completed purchase of the given book can create or update a review.
 
 There is also a legacy `/refresh` fallback handled by the frontend for older environments, but the current backend route is `/auth/refresh`.
 
