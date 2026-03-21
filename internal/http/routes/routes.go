@@ -6,9 +6,10 @@ package routes
 const (
 	HealthRoute = "/health"
 
-	BooksRoute  = "/books"
-	BookRoute   = "/book"
-	BookIDRoute = "/book/:id"
+	BooksRoute       = "/books"
+	BookRoute        = "/book"
+	BookIDRoute      = "/book/:id"
+	BookReviewsRoute = "/books/:id/reviews"
 
 	UsersRoute = "/users"
 	UserRoute  = "/user/:id"

@@ -205,6 +205,32 @@ func (r *orderRepo) ListOrders(
 	return orders, rows.Err()
 }
 
+func (r *orderRepo) HasUserPurchasedBook(
+	ctx context.Context,
+	userID, bookID uuid.UUID,
+) (bool, error) {
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM orders o
+			JOIN order_items oi ON oi.order_id = o.id
+			WHERE o.user_id = $1
+				AND oi.book_id = $2
+				AND o.status = $3
+				AND o.deleted_at IS NULL
+				AND oi.deleted_at IS NULL
+		);
+	`
+
+	var exists bool
+	row := queryRowWithTx(ctx, r.db, query, userID, bookID, domain.OrderCompleted)
+	if err := row.Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
 func (r *orderRepo) GetOrderByID(
 	ctx context.Context,
 	orderID uuid.UUID,

@@ -20,6 +20,7 @@ type mockOrderRepository struct {
 	decrementStockFunc     func(ctx context.Context, items []domain.OrderItem) error
 	listOrdersByUserFunc   func(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.OrderView, error)
 	listOrdersFunc         func(ctx context.Context, limit, offset int) ([]domain.OrderView, error)
+	hasUserPurchasedBookFn func(ctx context.Context, userID, bookID uuid.UUID) (bool, error)
 }
 
 func (m *mockOrderRepository) CreateOrder(ctx context.Context, order *domain.Order) error {
@@ -75,6 +76,12 @@ func (m *mockOrderRepository) ListOrders(ctx context.Context, limit, offset int)
 		return m.listOrdersFunc(ctx, limit, offset)
 	}
 	return []domain.OrderView{}, nil
+}
+func (m *mockOrderRepository) HasUserPurchasedBook(ctx context.Context, userID, bookID uuid.UUID) (bool, error) {
+	if m.hasUserPurchasedBookFn != nil {
+		return m.hasUserPurchasedBookFn(ctx, userID, bookID)
+	}
+	return false, nil
 }
 
 type noopCartRepository struct{}

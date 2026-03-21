@@ -17,6 +17,7 @@ type Router struct {
 	publisher domain.PublisherController
 	cart      domain.CartController
 	order     domain.OrderController
+	review    domain.ReviewController
 }
 
 func NewRouter(
@@ -27,6 +28,7 @@ func NewRouter(
 	publisher domain.PublisherController,
 	cart domain.CartController,
 	order domain.OrderController,
+	review domain.ReviewController,
 ) *Router {
 	return &Router{
 		user:      user,
@@ -36,6 +38,7 @@ func NewRouter(
 		publisher: publisher,
 		cart:      cart,
 		order:     order,
+		review:    review,
 	}
 }
 
@@ -51,4 +54,5 @@ func (r *Router) RegisterRoutes(group *gin.RouterGroup) {
 	r.publisher.RegisterRoutes(group)
 	r.cart.RegisterRoutes(group)
 	r.order.RegisterRoutes(group)
+	r.review.RegisterRoutes(group)
 }

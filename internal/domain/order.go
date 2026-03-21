@@ -34,12 +34,12 @@ type OrderItem struct {
 
 // OrderItemDetail defines model for OrderItemDetail
 type OrderItemDetail struct {
-	BookID     uuid.UUID `json:"book_id"`
-	Name       string    `json:"name"`
-	ImageURL   *string   `json:"image_url,omitempty"`
-	UnitPrice  float64   `json:"unit_price"`
-	Count      int       `json:"count"`
-	LineTotal  float64   `json:"line_total"`
+	BookID    uuid.UUID `json:"book_id"`
+	Name      string    `json:"name"`
+	ImageURL  *string   `json:"image_url,omitempty"`
+	UnitPrice float64   `json:"unit_price"`
+	Count     int       `json:"count"`
+	LineTotal float64   `json:"line_total"`
 } // @name OrderItemDetail
 
 // OrderView defines model for OrderView
@@ -64,6 +64,7 @@ type OrderRepository interface {
 	CreateOrderItems(ctx context.Context, items []OrderItem) error
 	ListOrdersByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]OrderView, error)
 	ListOrders(ctx context.Context, limit, offset int) ([]OrderView, error)
+	HasUserPurchasedBook(ctx context.Context, userID, bookID uuid.UUID) (bool, error)
 	GetOrderByID(ctx context.Context, orderID uuid.UUID) (Order, error)
 	GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]OrderItemDetail, error)
 	UpdateOrderPayment(ctx context.Context, orderID uuid.UUID, status PaymentStatus, method PaymentMethod) error

@@ -30,6 +30,7 @@ import (
 	"booknest/internal/service/category_service"
 	"booknest/internal/service/order_service"
 	"booknest/internal/service/publisher_service"
+	"booknest/internal/service/review_service"
 	"booknest/internal/service/user_service"
 )
 
@@ -157,6 +158,10 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	orderService := order_service.NewOrderService(txm, orderRepo, cartRepo)
 	orderController := controller.NewOrderController(orderService)
 
+	reviewRepo := repository.NewReviewRepository(gormdb)
+	reviewService := review_service.NewReviewService(reviewRepo, orderRepo)
+	reviewController := controller.NewReviewController(reviewService)
+
 	r := gin.Default()
 	r.Use(useCORSMiddleware(map[string]bool{
 		"http://localhost:3000": true,
@@ -189,6 +194,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 		publisherController,
 		cartController,
 		orderController,
+		reviewController,
 	)
 
 	// Mount only v1 now; v2 can be plugged in with another registrar later.

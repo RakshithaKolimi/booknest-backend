@@ -56,3 +56,31 @@ func TestOrderRepo_DecrementStock(t *testing.T) {
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestOrderRepo_HasUserPurchasedBook(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	repo := &orderRepo{db: mock, sb: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)}
+	userID := uuid.New()
+	bookID := uuid.New()
+
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs(userID, bookID, domain.OrderCompleted).
+		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(true))
+
+	purchased, err := repo.HasUserPurchasedBook(context.Background(), userID, bookID)
+	require.NoError(t, err)
+	require.True(t, purchased)
+
+	mock.ExpectQuery("SELECT EXISTS").
+		WithArgs(userID, bookID, domain.OrderCompleted).
+		WillReturnRows(pgxmock.NewRows([]string{"exists"}).AddRow(false))
+
+	purchased, err = repo.HasUserPurchasedBook(context.Background(), userID, bookID)
+	require.NoError(t, err)
+	require.False(t, purchased)
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
