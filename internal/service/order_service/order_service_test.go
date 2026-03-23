@@ -16,7 +16,7 @@ type mockOrderRepository struct {
 	getOrderByIDFunc       func(ctx context.Context, orderID uuid.UUID) (domain.Order, error)
 	getOrderItemsFunc      func(ctx context.Context, orderID uuid.UUID) ([]domain.OrderItemDetail, error)
 	updateOrderPaymentFunc func(ctx context.Context, orderID uuid.UUID, status domain.PaymentStatus, method domain.PaymentMethod) error
-	updateOrderStatusFunc  func(ctx context.Context, orderID uuid.UUID, status domain.OrderStatus) error
+	updateOrderStatusFunc  func(ctx context.Context, orderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error
 	decrementStockFunc     func(ctx context.Context, items []domain.OrderItem) error
 	listOrdersByUserFunc   func(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.OrderView, error)
 	listOrdersFunc         func(ctx context.Context, limit, offset int) ([]domain.OrderView, error)
@@ -53,9 +53,9 @@ func (m *mockOrderRepository) UpdateOrderPayment(ctx context.Context, orderID uu
 	}
 	return nil
 }
-func (m *mockOrderRepository) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status domain.OrderStatus) error {
+func (m *mockOrderRepository) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
 	if m.updateOrderStatusFunc != nil {
-		return m.updateOrderStatusFunc(ctx, orderID, status)
+		return m.updateOrderStatusFunc(ctx, orderID, status, cancellationReason)
 	}
 	return nil
 }
@@ -188,6 +188,7 @@ func TestOrderListPassThrough(t *testing.T) {
 func TestValidateOrderForPaymentConfirmation(t *testing.T) {
 	paid := domain.PaymentPaid
 	pending := domain.PaymentPending
+	failed := domain.PaymentFailed
 
 	tests := []struct {
 		name    string
@@ -199,6 +200,14 @@ func TestValidateOrderForPaymentConfirmation(t *testing.T) {
 			order: domain.Order{
 				Status:        domain.OrderPending,
 				PaymentStatus: &pending,
+			},
+			wantErr: false,
+		},
+		{
+			name: "allows pending order with failed payment",
+			order: domain.Order{
+				Status:        domain.OrderPending,
+				PaymentStatus: &failed,
 			},
 			wantErr: false,
 		},
@@ -222,6 +231,14 @@ func TestValidateOrderForPaymentConfirmation(t *testing.T) {
 			name: "rejects cancelled order",
 			order: domain.Order{
 				Status:        domain.OrderCancelled,
+				PaymentStatus: &pending,
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects failed order",
+			order: domain.Order{
+				Status:        domain.OrderFailed,
 				PaymentStatus: &pending,
 			},
 			wantErr: true,
@@ -358,11 +375,8 @@ func TestConfirmPayment_SuccessPathClearsCart(t *testing.T) {
 				}
 				return nil
 			},
-			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus) error {
+			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
 				updateStatusCalls++
-				if status != domain.OrderCompleted {
-					t.Fatalf("expected completed status")
-				}
 				return nil
 			},
 			decrementStockFunc: func(ctx context.Context, items []domain.OrderItem) error {
@@ -388,17 +402,17 @@ func TestConfirmPayment_SuccessPathClearsCart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
-	if updatePaymentCalls != 1 || updateStatusCalls != 1 || decrementCalls != 1 || clearCalls != 1 {
+	if updatePaymentCalls != 1 || updateStatusCalls != 0 || decrementCalls != 1 || clearCalls != 1 {
 		t.Fatalf("unexpected call counts: payment=%d status=%d decrement=%d clear=%d", updatePaymentCalls, updateStatusCalls, decrementCalls, clearCalls)
 	}
 }
 
-func TestConfirmPayment_FailurePathCancelsOrder(t *testing.T) {
+func TestConfirmPayment_FailurePathFailsOrder(t *testing.T) {
 	userID := uuid.New()
 	orderID := uuid.New()
 	pending := domain.PaymentPending
-	paidCalled := false
-	cancelCalled := false
+	paymentFailedCalled := false
+	orderFailedCalled := false
 
 	svc := NewOrderService(
 		&noopTransactionManager{},
@@ -416,13 +430,13 @@ func TestConfirmPayment_FailurePathCancelsOrder(t *testing.T) {
 			},
 			updateOrderPaymentFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.PaymentStatus, method domain.PaymentMethod) error {
 				if status == domain.PaymentFailed {
-					paidCalled = true
+					paymentFailedCalled = true
 				}
 				return nil
 			},
-			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus) error {
-				if status == domain.OrderCancelled {
-					cancelCalled = true
+			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
+				if status == domain.OrderFailed {
+					orderFailedCalled = true
 				}
 				return nil
 			},
@@ -434,8 +448,181 @@ func TestConfirmPayment_FailurePathCancelsOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
-	if !paidCalled || !cancelCalled {
-		t.Fatalf("expected payment failed and cancel updates")
+	if !paymentFailedCalled || !orderFailedCalled {
+		t.Fatalf("expected payment failed and order failed updates")
+	}
+}
+
+func TestCancelOrder_StartsRefundForPaidOrder(t *testing.T) {
+	userID := uuid.New()
+	orderID := uuid.New()
+	reason := "Need to cancel"
+	paid := domain.PaymentPaid
+	refundInitiatedCalled := false
+	cancelCalled := false
+
+	svc := NewOrderService(
+		&noopTransactionManager{},
+		&mockOrderRepository{
+			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
+				return domain.Order{
+					ID:            orderID,
+					UserID:        userID,
+					Status:        domain.OrderPending,
+					PaymentMethod: ptrPaymentMethod(domain.PaymentUPI),
+					PaymentStatus: &paid,
+				}, nil
+			},
+			updateOrderPaymentFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.PaymentStatus, method domain.PaymentMethod) error {
+				if status == domain.PaymentRefundInitiated && method == domain.PaymentUPI {
+					refundInitiatedCalled = true
+				}
+				return nil
+			},
+			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
+				if status == domain.OrderCancelled && cancellationReason != nil && *cancellationReason == reason {
+					cancelCalled = true
+				}
+				return nil
+			},
+			getOrderItemsFunc: func(ctx context.Context, gotOrderID uuid.UUID) ([]domain.OrderItemDetail, error) {
+				return []domain.OrderItemDetail{}, nil
+			},
+		},
+		&mockCartRepository{},
+	)
+
+	_, err := svc.CancelOrder(context.Background(), userID, domain.OrderCancelInput{
+		OrderID:            orderID,
+		CancellationReason: reason,
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if !refundInitiatedCalled || !cancelCalled {
+		t.Fatalf("expected refund initiation and cancel status update")
+	}
+}
+
+func TestValidateOrderForCancellation(t *testing.T) {
+	tests := []struct {
+		name    string
+		order   domain.Order
+		reason  string
+		wantErr string
+	}{
+		{
+			name:    "requires reason",
+			order:   domain.Order{Status: domain.OrderPending},
+			reason:  "",
+			wantErr: "cancellation reason is required",
+		},
+		{
+			name:    "rejects completed order",
+			order:   domain.Order{Status: domain.OrderCompleted},
+			reason:  "Changed plans",
+			wantErr: "completed orders cannot be cancelled",
+		},
+		{
+			name:    "rejects already cancelled order",
+			order:   domain.Order{Status: domain.OrderCancelled},
+			reason:  "Changed plans",
+			wantErr: "order is already cancelled",
+		},
+		{
+			name:   "allows failed order",
+			order:  domain.Order{Status: domain.OrderFailed},
+			reason: "Changed plans",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateOrderForCancellation(tc.order, tc.reason)
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+			if tc.wantErr != "" && (err == nil || err.Error() != tc.wantErr) {
+				t.Fatalf("expected error %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestValidateAdminOrderStatusUpdate(t *testing.T) {
+	refundInitiated := domain.PaymentRefundInitiated
+	refunded := domain.PaymentRefunded
+
+	tests := []struct {
+		name              string
+		order             domain.Order
+		nextStatus        domain.OrderStatus
+		nextPaymentStatus *domain.PaymentStatus
+		reason            string
+		wantErr           string
+	}{
+		{
+			name:    "requires at least one update",
+			order:   domain.Order{Status: domain.OrderPending},
+			wantErr: "status or payment status is required",
+		},
+		{
+			name:       "rejects unsupported admin status",
+			order:      domain.Order{Status: domain.OrderPending},
+			nextStatus: domain.OrderFailed,
+			wantErr:    "admin can only set order status to COMPLETED or CANCELLED",
+		},
+		{
+			name:       "rejects finalized order status update",
+			order:      domain.Order{Status: domain.OrderCompleted},
+			nextStatus: domain.OrderCancelled,
+			reason:     "Out of stock",
+			wantErr:    "order is already finalized",
+		},
+		{
+			name:       "requires cancellation reason",
+			order:      domain.Order{Status: domain.OrderPending},
+			nextStatus: domain.OrderCancelled,
+			wantErr:    "cancellation reason is required",
+		},
+		{
+			name:              "rejects invalid refund transition",
+			order:             domain.Order{Status: domain.OrderCancelled},
+			nextPaymentStatus: &refunded,
+			wantErr:           "refund can only be completed after refund is initiated",
+		},
+		{
+			name:              "allows refund completion after initiation",
+			order:             domain.Order{Status: domain.OrderCancelled, PaymentStatus: &refundInitiated},
+			nextPaymentStatus: &refunded,
+		},
+		{
+			name:       "allows completion status",
+			order:      domain.Order{Status: domain.OrderPending},
+			nextStatus: domain.OrderCompleted,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAdminOrderStatusUpdate(tc.order, tc.nextStatus, tc.nextPaymentStatus, tc.reason)
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+			if tc.wantErr != "" && (err == nil || err.Error() != tc.wantErr) {
+				t.Fatalf("expected error %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}
+
+func TestPaymentMethodOrDefault(t *testing.T) {
+	if got := paymentMethodOrDefault(nil); got != domain.PaymentCOD {
+		t.Fatalf("expected COD default, got %s", got)
+	}
+
+	if got := paymentMethodOrDefault(ptrPaymentMethod(domain.PaymentCreditCard)); got != domain.PaymentCreditCard {
+		t.Fatalf("expected card payment method, got %s", got)
 	}
 }
 
@@ -455,6 +642,262 @@ func TestConfirmPayment_RejectsUnauthorizedUser(t *testing.T) {
 	_, err := svc.ConfirmPayment(context.Background(), userID, domain.PaymentConfirmInput{OrderID: orderID, Success: true})
 	if err == nil || err.Error() != "not authorized to confirm this order" {
 		t.Fatalf("expected unauthorized error, got %v", err)
+	}
+}
+
+func TestCancelOrder_RejectsUnauthorizedUser(t *testing.T) {
+	userID := uuid.New()
+	orderID := uuid.New()
+	svc := NewOrderService(
+		&noopTransactionManager{},
+		&mockOrderRepository{
+			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
+				return domain.Order{ID: orderID, UserID: uuid.New(), Status: domain.OrderPending}, nil
+			},
+		},
+		&mockCartRepository{},
+	)
+
+	_, err := svc.CancelOrder(context.Background(), userID, domain.OrderCancelInput{
+		OrderID:            orderID,
+		CancellationReason: "Changed my mind",
+	})
+	if err == nil || err.Error() != "not authorized to cancel this order" {
+		t.Fatalf("expected unauthorized error, got %v", err)
+	}
+}
+
+func TestCancelOrder_UserCanCancelFailedOrder(t *testing.T) {
+	userID := uuid.New()
+	orderID := uuid.New()
+	reason := "Customer requested cancellation"
+	cancelCalled := false
+
+	svc := NewOrderService(
+		&noopTransactionManager{},
+		&mockOrderRepository{
+			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
+				return domain.Order{ID: orderID, UserID: userID, Status: domain.OrderFailed}, nil
+			},
+			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
+				cancelCalled = true
+				if status != domain.OrderCancelled || cancellationReason == nil || *cancellationReason != reason {
+					t.Fatalf("unexpected cancel payload")
+				}
+				return nil
+			},
+			getOrderItemsFunc: func(ctx context.Context, gotOrderID uuid.UUID) ([]domain.OrderItemDetail, error) {
+				return []domain.OrderItemDetail{}, nil
+			},
+		},
+		&mockCartRepository{},
+	)
+
+	_, err := svc.CancelOrder(context.Background(), userID, domain.OrderCancelInput{
+		OrderID:            orderID,
+		CancellationReason: reason,
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if !cancelCalled {
+		t.Fatalf("expected cancel status update")
+	}
+}
+
+func TestCancelOrder_UsesTrimmedReasonWithoutRefundWhenUnpaid(t *testing.T) {
+	userID := uuid.New()
+	orderID := uuid.New()
+	pending := domain.PaymentPending
+	paymentUpdated := false
+
+	svc := NewOrderService(
+		&noopTransactionManager{},
+		&mockOrderRepository{
+			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
+				return domain.Order{
+					ID:            orderID,
+					UserID:        userID,
+					Status:        domain.OrderPending,
+					PaymentStatus: &pending,
+				}, nil
+			},
+			updateOrderPaymentFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.PaymentStatus, method domain.PaymentMethod) error {
+				paymentUpdated = true
+				return nil
+			},
+			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
+				if status != domain.OrderCancelled {
+					t.Fatalf("expected cancelled status, got %s", status)
+				}
+				if cancellationReason == nil || *cancellationReason != "Need to cancel" {
+					t.Fatalf("expected trimmed cancellation reason, got %+v", cancellationReason)
+				}
+				return nil
+			},
+			getOrderItemsFunc: func(ctx context.Context, gotOrderID uuid.UUID) ([]domain.OrderItemDetail, error) {
+				return []domain.OrderItemDetail{}, nil
+			},
+		},
+		&mockCartRepository{},
+	)
+
+	_, err := svc.CancelOrder(context.Background(), userID, domain.OrderCancelInput{
+		OrderID:            orderID,
+		CancellationReason: "  Need to cancel  ",
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if paymentUpdated {
+		t.Fatalf("did not expect refund initiation for unpaid order")
+	}
+}
+
+func TestAdminUpdateOrderStatus_RequiresCancellationReason(t *testing.T) {
+	orderID := uuid.New()
+
+	svc := NewOrderService(
+		&noopTransactionManager{},
+		&mockOrderRepository{
+			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
+				return domain.Order{ID: orderID, Status: domain.OrderPending}, nil
+			},
+		},
+		&mockCartRepository{},
+	)
+
+	_, err := svc.AdminUpdateOrderStatus(context.Background(), domain.AdminOrderStatusUpdateInput{
+		OrderID: orderID,
+		Status:  domain.OrderCancelled,
+	})
+	if err == nil || err.Error() != "cancellation reason is required" {
+		t.Fatalf("expected cancellation reason error, got %v", err)
+	}
+}
+
+func TestAdminUpdateOrderStatus_CompletesRefund(t *testing.T) {
+	orderID := uuid.New()
+	refundInitiated := domain.PaymentRefundInitiated
+	refundedCalled := false
+
+	svc := NewOrderService(
+		&noopTransactionManager{},
+		&mockOrderRepository{
+			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
+				return domain.Order{
+					ID:            orderID,
+					Status:        domain.OrderCancelled,
+					PaymentMethod: ptrPaymentMethod(domain.PaymentCOD),
+					PaymentStatus: &refundInitiated,
+				}, nil
+			},
+			updateOrderPaymentFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.PaymentStatus, method domain.PaymentMethod) error {
+				if status == domain.PaymentRefunded && method == domain.PaymentCOD {
+					refundedCalled = true
+				}
+				return nil
+			},
+			getOrderItemsFunc: func(ctx context.Context, gotOrderID uuid.UUID) ([]domain.OrderItemDetail, error) {
+				return []domain.OrderItemDetail{}, nil
+			},
+		},
+		&mockCartRepository{},
+	)
+
+	_, err := svc.AdminUpdateOrderStatus(context.Background(), domain.AdminOrderStatusUpdateInput{
+		OrderID:       orderID,
+		PaymentStatus: ptrPaymentStatus(domain.PaymentRefunded),
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if !refundedCalled {
+		t.Fatalf("expected refund completion update")
+	}
+}
+
+func TestAdminUpdateOrderStatus_CancelsPaidOrderAndDefaultsPaymentMethod(t *testing.T) {
+	orderID := uuid.New()
+	paid := domain.PaymentPaid
+	refundInitiatedCalled := false
+	cancelCalled := false
+
+	svc := NewOrderService(
+		&noopTransactionManager{},
+		&mockOrderRepository{
+			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
+				return domain.Order{
+					ID:            orderID,
+					Status:        domain.OrderPending,
+					PaymentStatus: &paid,
+				}, nil
+			},
+			updateOrderPaymentFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.PaymentStatus, method domain.PaymentMethod) error {
+				if status == domain.PaymentRefundInitiated && method == domain.PaymentCOD {
+					refundInitiatedCalled = true
+				}
+				return nil
+			},
+			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
+				if status == domain.OrderCancelled && cancellationReason != nil && *cancellationReason == "Out of stock" {
+					cancelCalled = true
+				}
+				return nil
+			},
+			getOrderItemsFunc: func(ctx context.Context, gotOrderID uuid.UUID) ([]domain.OrderItemDetail, error) {
+				return []domain.OrderItemDetail{}, nil
+			},
+		},
+		&mockCartRepository{},
+	)
+
+	_, err := svc.AdminUpdateOrderStatus(context.Background(), domain.AdminOrderStatusUpdateInput{
+		OrderID:            orderID,
+		Status:             domain.OrderCancelled,
+		CancellationReason: "  Out of stock  ",
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if !refundInitiatedCalled || !cancelCalled {
+		t.Fatalf("expected refund initiation and cancel status update")
+	}
+}
+
+func TestAdminUpdateOrderStatus_CompletesOrder(t *testing.T) {
+	orderID := uuid.New()
+	completedCalled := false
+
+	svc := NewOrderService(
+		&noopTransactionManager{},
+		&mockOrderRepository{
+			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
+				return domain.Order{ID: orderID, Status: domain.OrderPending}, nil
+			},
+			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
+				completedCalled = true
+				if status != domain.OrderCompleted || cancellationReason != nil {
+					t.Fatalf("unexpected completion update payload")
+				}
+				return nil
+			},
+			getOrderItemsFunc: func(ctx context.Context, gotOrderID uuid.UUID) ([]domain.OrderItemDetail, error) {
+				return []domain.OrderItemDetail{}, nil
+			},
+		},
+		&mockCartRepository{},
+	)
+
+	_, err := svc.AdminUpdateOrderStatus(context.Background(), domain.AdminOrderStatusUpdateInput{
+		OrderID: orderID,
+		Status:  domain.OrderCompleted,
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if !completedCalled {
+		t.Fatalf("expected completed status update")
 	}
 }
 

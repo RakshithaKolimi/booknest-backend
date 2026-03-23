@@ -10,10 +10,11 @@ const (
 type PaymentStatus string // @name PaymentStatus
 
 const (
-	PaymentPending  PaymentStatus = "PENDING"
-	PaymentPaid     PaymentStatus = "PAID"
-	PaymentRefunded PaymentStatus = "REFUNDED"
-	PaymentFailed   PaymentStatus = "FAILED"
+	PaymentPending         PaymentStatus = "PENDING"
+	PaymentPaid            PaymentStatus = "PAID"
+	PaymentRefundInitiated PaymentStatus = "REFUND_INITIATED"
+	PaymentRefunded        PaymentStatus = "REFUNDED"
+	PaymentFailed          PaymentStatus = "FAILED"
 )
 
 type PaymentMethod string
@@ -30,6 +31,7 @@ type OrderStatus string
 
 const (
 	OrderPending   OrderStatus = "PENDING"
+	OrderFailed    OrderStatus = "FAILED"
 	OrderCancelled OrderStatus = "CANCELLED"
 	OrderCompleted OrderStatus = "COMPLETED"
 )

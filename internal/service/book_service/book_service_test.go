@@ -175,3 +175,26 @@ func TestBookServiceCreateAndUpdatePassThrough(t *testing.T) {
 		t.Fatalf("expected both create and update repository calls")
 	}
 }
+
+func TestBookServiceQueryBooksPassThrough(t *testing.T) {
+	nextCursor := "next-cursor"
+	filter := domain.BookFilter{}
+	query := domain.QueryOptions{Limit: 12, Offset: 3, Cursor: &nextCursor}
+	repo := &mockBookRepository{
+		queryBooksFunc: func(ctx context.Context, gotFilter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, *string, bool, error) {
+			if pagination.Limit != query.Limit || pagination.Offset != query.Offset || pagination.Cursor == nil || *pagination.Cursor != nextCursor {
+				t.Fatalf("unexpected query options: %+v", pagination)
+			}
+			return []domain.Book{{ID: uuid.New(), Name: "Book"}}, 1, &nextCursor, true, nil
+		},
+	}
+
+	svc := NewBookService(repo)
+	result, err := svc.QueryBooks(context.Background(), filter, query)
+	if err != nil {
+		t.Fatalf("unexpected query error: %v", err)
+	}
+	if result.Total != 1 || !result.HasMore || result.NextCursor == nil || *result.NextCursor != nextCursor {
+		t.Fatalf("unexpected query result: %+v", result)
+	}
+}

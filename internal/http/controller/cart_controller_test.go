@@ -136,3 +136,89 @@ func TestCartControllerClearCart(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
+
+func TestCartControllerGetUpdateRemoveAndClearErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	bookID := uuid.New()
+	ctl := NewCartController(&mockCartServiceController{
+		getCartFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.CartView, error) {
+			return domain.CartView{}, errors.New("boom")
+		},
+		updateItemFunc: func(ctx context.Context, gotUserID uuid.UUID, input domain.CartItemInput) (domain.CartView, error) {
+			return domain.CartView{}, errors.New("boom")
+		},
+		removeItemFunc: func(ctx context.Context, gotUserID uuid.UUID, gotBookID uuid.UUID) (domain.CartView, error) {
+			return domain.CartView{}, errors.New("boom")
+		},
+		clearFunc: func(ctx context.Context, gotUserID uuid.UUID) error { return errors.New("boom") },
+	}).(*cartController)
+
+	tests := []struct {
+		name   string
+		method func(*gin.Context)
+		setup  func(*gin.Context)
+		body   string
+		code   int
+	}{
+		{name: "get error", method: ctl.GetCart, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},
+		{name: "update success parse error", method: ctl.UpdateItem, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, body: `{`, code: http.StatusBadRequest},
+		{name: "update service error", method: ctl.UpdateItem, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, body: `{"book_id":"` + `00000000-0000-0000-0000-000000000001` + `","count":2}`, code: http.StatusBadRequest},
+		{name: "remove invalid book id", method: ctl.RemoveItem, setup: func(c *gin.Context) {
+			c.Set("user_id", userID.String())
+			c.Params = gin.Params{{Key: "book_id", Value: "bad-id"}}
+		}, code: http.StatusBadRequest},
+		{name: "remove service error", method: ctl.RemoveItem, setup: func(c *gin.Context) {
+			c.Set("user_id", userID.String())
+			c.Params = gin.Params{{Key: "book_id", Value: bookID.String()}}
+		}, code: http.StatusBadRequest},
+		{name: "clear unauthorized", method: ctl.ClearCart, code: http.StatusUnauthorized},
+		{name: "clear error", method: ctl.ClearCart, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			if tc.setup != nil {
+				tc.setup(c)
+			}
+			c.Request = httptest.NewRequest(http.MethodPost, "/test", bytes.NewBufferString(tc.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			tc.method(c)
+			if w.Code != tc.code {
+				t.Fatalf("expected %d, got %d", tc.code, w.Code)
+			}
+		})
+	}
+}
+
+func TestCartControllerAddItemUnauthorizedAndError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	bookID := uuid.New()
+	ctl := NewCartController(&mockCartServiceController{
+		addItemFunc: func(ctx context.Context, gotUserID uuid.UUID, input domain.CartItemInput) (domain.CartView, error) {
+			return domain.CartView{}, errors.New("boom")
+		},
+	}).(*cartController)
+
+	wUnauthorized := httptest.NewRecorder()
+	cUnauthorized, _ := gin.CreateTestContext(wUnauthorized)
+	cUnauthorized.Request = httptest.NewRequest(http.MethodPost, "/cart/items", bytes.NewBufferString(`{}`))
+	cUnauthorized.Request.Header.Set("Content-Type", "application/json")
+	ctl.AddItem(cUnauthorized)
+	if wUnauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", wUnauthorized.Code)
+	}
+
+	wError := httptest.NewRecorder()
+	cError, _ := gin.CreateTestContext(wError)
+	cError.Set("user_id", userID.String())
+	cError.Request = httptest.NewRequest(http.MethodPost, "/cart/items", bytes.NewBufferString(`{"book_id":"`+bookID.String()+`","count":2}`))
+	cError.Request.Header.Set("Content-Type", "application/json")
+	ctl.AddItem(cError)
+	if wError.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", wError.Code)
+	}
+}

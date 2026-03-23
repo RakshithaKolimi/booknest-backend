@@ -182,3 +182,133 @@ func TestBookControllerQueryBooks(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
+
+func TestBookControllerCreateUpdateDeleteAndErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	id := uuid.New()
+	svc := &mockBookServiceController{
+		createBookFunc: func(ctx context.Context, input domain.BookInput) (*domain.Book, error) {
+			return &domain.Book{ID: id, Name: input.Name}, nil
+		},
+		updateBookFunc: func(ctx context.Context, gotID uuid.UUID, input domain.BookInput) (*domain.Book, error) {
+			return &domain.Book{ID: gotID, Name: input.Name}, nil
+		},
+		deleteBookFunc: func(ctx context.Context, gotID uuid.UUID) error { return nil },
+	}
+	ctl := NewBookController(svc).(*bookController)
+
+	payload := `{"name":"Book","author_name":"Author","publisher_id":"` + uuid.New().String() + `","price":10}`
+
+	cw := httptest.NewRecorder()
+	cc, _ := gin.CreateTestContext(cw)
+	cc.Request = httptest.NewRequest(http.MethodPost, "/books", bytes.NewBufferString(payload))
+	cc.Request.Header.Set("Content-Type", "application/json")
+	ctl.createBook(cc)
+	if cw.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", cw.Code)
+	}
+
+	uw := httptest.NewRecorder()
+	uc, _ := gin.CreateTestContext(uw)
+	uc.Params = gin.Params{{Key: "id", Value: id.String()}}
+	uc.Request = httptest.NewRequest(http.MethodPut, "/books/"+id.String(), bytes.NewBufferString(payload))
+	uc.Request.Header.Set("Content-Type", "application/json")
+	ctl.updateBook(uc)
+	if uw.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", uw.Code)
+	}
+
+	dw := httptest.NewRecorder()
+	dc, _ := gin.CreateTestContext(dw)
+	dc.Params = gin.Params{{Key: "id", Value: id.String()}}
+	dc.Request = httptest.NewRequest(http.MethodDelete, "/books/"+id.String(), nil)
+	ctl.deleteBook(dc)
+	if dw.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", dw.Code)
+	}
+}
+
+func TestBookControllerDirectErrorPaths(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	id := uuid.New()
+	svc := &mockBookServiceController{
+		createBookFunc: func(ctx context.Context, input domain.BookInput) (*domain.Book, error) {
+			return nil, errors.New("boom")
+		},
+		getBookFunc:   func(ctx context.Context, gotID uuid.UUID) (*domain.Book, error) { return nil, errors.New("boom") },
+		listBooksFunc: func(ctx context.Context, limit, offset int) ([]domain.Book, error) { return nil, errors.New("boom") },
+		filterByCriteriaFun: func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error) {
+			return nil, errors.New("boom")
+		},
+		queryBooksFunc: func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error) {
+			return nil, errors.New("boom")
+		},
+		updateBookFunc: func(ctx context.Context, gotID uuid.UUID, input domain.BookInput) (*domain.Book, error) {
+			return nil, errors.New("boom")
+		},
+		deleteBookFunc: func(ctx context.Context, gotID uuid.UUID) error { return errors.New("boom") },
+	}
+	ctl := NewBookController(svc).(*bookController)
+
+	tests := []struct {
+		name   string
+		method func(*gin.Context)
+		setup  func(*gin.Context)
+		body   string
+		url    string
+		code   int
+	}{
+		{name: "get invalid id", method: ctl.getBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad"}} }, code: http.StatusBadRequest},
+		{name: "get not found", method: ctl.getBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusNotFound},
+		{name: "list error", method: ctl.listBooks, code: http.StatusInternalServerError},
+		{name: "query invalid limit", method: ctl.queryBooks, url: "/books/search?limit=bad", code: http.StatusBadRequest},
+		{name: "query invalid offset", method: ctl.queryBooks, url: "/books/search?offset=bad", code: http.StatusBadRequest},
+		{name: "query error", method: ctl.queryBooks, url: "/books/search", code: http.StatusInternalServerError},
+		{name: "filter error", method: ctl.filterBooks, body: `{}`, code: http.StatusInternalServerError},
+		{name: "update invalid id", method: ctl.updateBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad"}} }, code: http.StatusBadRequest},
+		{name: "update error", method: ctl.updateBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, body: `{"name":"Book","author_name":"Author","publisher_id":"` + uuid.New().String() + `"}`, code: http.StatusInternalServerError},
+		{name: "delete invalid id", method: ctl.deleteBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad"}} }, code: http.StatusBadRequest},
+		{name: "delete error", method: ctl.deleteBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusInternalServerError},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			if tc.setup != nil {
+				tc.setup(c)
+			}
+			url := tc.url
+			if url == "" {
+				url = "/test"
+			}
+			c.Request = httptest.NewRequest(http.MethodPost, url, bytes.NewBufferString(tc.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			tc.method(c)
+			if w.Code != tc.code {
+				t.Fatalf("expected %d, got %d", tc.code, w.Code)
+			}
+		})
+	}
+}
+
+func TestBookControllerQueryBooksClampLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctl := NewBookController(&mockBookServiceController{
+		queryBooksFunc: func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error) {
+			if q.Limit != 100 {
+				t.Fatalf("expected limit to clamp to 100, got %d", q.Limit)
+			}
+			return &domain.BookSearchResult{Limit: q.Limit}, nil
+		},
+	}).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/search?limit=500", nil)
+
+	ctl.queryBooks(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}

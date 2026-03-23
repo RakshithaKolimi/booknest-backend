@@ -163,3 +163,30 @@ func TestUseCORSMiddleware_DisallowedOrigin(t *testing.T) {
 		t.Fatalf("expected no allow-origin header, got %q", got)
 	}
 }
+
+func TestInitRedisClient(t *testing.T) {
+	t.Run("returns nil when redis addr is empty", func(t *testing.T) {
+		t.Setenv("REDIS_ADDR", "")
+
+		client, err := initRedisClient()
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if client != nil {
+			t.Fatalf("expected nil client, got %+v", client)
+		}
+	})
+
+	t.Run("returns parse error for invalid db", func(t *testing.T) {
+		t.Setenv("REDIS_ADDR", "localhost:6379")
+		t.Setenv("REDIS_DB", "bad")
+
+		client, err := initRedisClient()
+		if err == nil {
+			t.Fatal("expected parse error, got nil")
+		}
+		if client != nil {
+			t.Fatalf("expected nil client, got %+v", client)
+		}
+	})
+}

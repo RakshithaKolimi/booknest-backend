@@ -499,3 +499,270 @@ func TestVerifyMobile_Success(t *testing.T) {
 		}
 	}
 }
+
+func TestUserControllerRegisterDirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	ctl := NewUserController(&MockUserService{
+		RegisterFunc: func(ctx context.Context, in domain.UserInput) error {
+			called = true
+			if in.Email != "jane@example.com" || in.Role != domain.UserRoleUser {
+				t.Fatalf("unexpected input: %+v", in)
+			}
+			return nil
+		},
+	}).(*userController)
+
+	body, _ := json.Marshal(domain.UserInput{
+		FirstName: "Jane",
+		LastName:  "Doe",
+		Email:     "jane@example.com",
+		Mobile:    "+15555550123",
+		Password:  "password123",
+		Role:      domain.UserRoleUser,
+	})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	ctl.Register(c)
+	if w.Code != http.StatusCreated || !called {
+		t.Fatalf("expected register success, code=%d called=%v", w.Code, called)
+	}
+}
+
+func TestUserControllerRegisterErrorDirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctl := NewUserController(&MockUserService{
+		RegisterFunc: func(ctx context.Context, in domain.UserInput) error {
+			return errors.New("create failed")
+		},
+	}).(*userController)
+
+	body, _ := json.Marshal(domain.UserInput{
+		FirstName: "Jane",
+		LastName:  "Doe",
+		Email:     "jane@example.com",
+		Mobile:    "+15555550123",
+		Password:  "password123",
+		Role:      domain.UserRoleUser,
+	})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	ctl.Register(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestUserControllerGetUserDirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	ctl := NewUserController(&MockUserService{
+		FindUserFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+			return domain.User{ID: id, Email: "jane@example.com"}, nil
+		},
+	}).(*userController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: userID.String()}}
+	c.Request = httptest.NewRequest(http.MethodGet, "/user/"+userID.String(), nil)
+
+	ctl.GetUser(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestUserControllerDeleteUserDirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	deleted := false
+	ctl := NewUserController(&MockUserService{
+		DeleteUserFunc: func(ctx context.Context, id uuid.UUID) error {
+			deleted = true
+			return nil
+		},
+	}).(*userController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("user_id", userID.String())
+	c.Params = gin.Params{{Key: "id", Value: userID.String()}}
+	c.Request = httptest.NewRequest(http.MethodDelete, "/user/"+userID.String(), nil)
+
+	ctl.DeleteUser(c)
+	if w.Code != http.StatusOK || !deleted {
+		t.Fatalf("expected delete success, code=%d deleted=%v", w.Code, deleted)
+	}
+}
+
+func TestUserControllerDeleteUserForbiddenAndUnauthorized(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctl := NewUserController(&MockUserService{}).(*userController)
+	targetID := uuid.New()
+
+	wUnauthorized := httptest.NewRecorder()
+	cUnauthorized, _ := gin.CreateTestContext(wUnauthorized)
+	cUnauthorized.Params = gin.Params{{Key: "id", Value: targetID.String()}}
+	cUnauthorized.Request = httptest.NewRequest(http.MethodDelete, "/user/"+targetID.String(), nil)
+	ctl.DeleteUser(cUnauthorized)
+	if wUnauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", wUnauthorized.Code)
+	}
+
+	wForbidden := httptest.NewRecorder()
+	cForbidden, _ := gin.CreateTestContext(wForbidden)
+	cForbidden.Set("user_id", uuid.New().String())
+	cForbidden.Params = gin.Params{{Key: "id", Value: targetID.String()}}
+	cForbidden.Request = httptest.NewRequest(http.MethodDelete, "/user/"+targetID.String(), nil)
+	ctl.DeleteUser(cForbidden)
+	if wForbidden.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", wForbidden.Code)
+	}
+}
+
+func TestUserControllerVerifyAndResetDirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	ctl := NewUserController(&MockUserService{
+		VerifyEmailFunc:  func(ctx context.Context, rawToken string) error { return nil },
+		VerifyMobileFunc: func(ctx context.Context, otp string) error { return nil },
+		ResetPasswordFunc: func(ctx context.Context, gotUserID uuid.UUID, newPassword string) error {
+			if gotUserID != userID || newPassword != "newpassword123" {
+				t.Fatalf("unexpected reset password input")
+			}
+			return nil
+		},
+		ResendEmailVerificationFunc: func(ctx context.Context, gotUserID uuid.UUID) error {
+			if gotUserID != userID {
+				t.Fatalf("unexpected resend email user id")
+			}
+			return nil
+		},
+		ResendMobileOTPFunc: func(ctx context.Context, gotUserID uuid.UUID) error {
+			if gotUserID != userID {
+				t.Fatalf("unexpected resend mobile user id")
+			}
+			return nil
+		},
+	}).(*userController)
+
+	cases := []struct {
+		name   string
+		method func(*gin.Context)
+		body   string
+		setup  func(*gin.Context)
+	}{
+		{name: "verify email", method: ctl.VerifyEmail, body: `{"token":"email-token"}`},
+		{name: "verify mobile", method: ctl.VerifyMobile, body: `{"otp":"123456"}`},
+		{name: "reset password", method: ctl.ResetPassword, body: `{"new_password":"newpassword123"}`, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }},
+		{name: "resend email", method: ctl.ResendEmailVerification, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }},
+		{name: "resend mobile", method: ctl.ResendMobileOTP, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			if tc.setup != nil {
+				tc.setup(c)
+			}
+			c.Request = httptest.NewRequest(http.MethodPost, "/test", bytes.NewBufferString(tc.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			tc.method(c)
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+		})
+	}
+}
+
+func TestUserControllerHandlerErrorsDirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	ctl := NewUserController(&MockUserService{
+		FindUserFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+			return domain.User{}, errors.New("not found")
+		},
+		ResetPasswordWithTokenFunc: func(ctx context.Context, rawToken, newPassword string) error {
+			return errors.New("invalid token")
+		},
+		VerifyEmailFunc:             func(ctx context.Context, rawToken string) error { return errors.New("bad token") },
+		VerifyMobileFunc:            func(ctx context.Context, otp string) error { return errors.New("bad otp") },
+		ResendEmailVerificationFunc: func(ctx context.Context, gotUserID uuid.UUID) error { return errors.New("boom") },
+		ResendMobileOTPFunc:         func(ctx context.Context, gotUserID uuid.UUID) error { return errors.New("boom") },
+		ResetPasswordFunc:           func(ctx context.Context, gotUserID uuid.UUID, newPassword string) error { return errors.New("boom") },
+	}).(*userController)
+
+	t.Run("get user invalid id", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: "bad-id"}}
+		c.Request = httptest.NewRequest(http.MethodGet, "/user/bad-id", nil)
+		ctl.GetUser(c)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("get user not found", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: uuid.New().String()}}
+		c.Request = httptest.NewRequest(http.MethodGet, "/user/x", nil)
+		ctl.GetUser(c)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
+		}
+	})
+
+	t.Run("reset password with token error", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodPost, "/reset-password/confirm", bytes.NewBufferString(`{"token":"x","new_password":"newpassword123"}`))
+		c.Request.Header.Set("Content-Type", "application/json")
+		ctl.ResetPasswordWithToken(c)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", w.Code)
+		}
+	})
+
+	handlers := []struct {
+		name   string
+		method func(*gin.Context)
+		body   string
+		setup  func(*gin.Context)
+		code   int
+	}{
+		{name: "verify email error", method: ctl.VerifyEmail, body: `{"token":"bad"}`, code: http.StatusBadRequest},
+		{name: "verify mobile error", method: ctl.VerifyMobile, body: `{"otp":"bad"}`, code: http.StatusBadRequest},
+		{name: "resend email unauthorized", method: ctl.ResendEmailVerification, code: http.StatusUnauthorized},
+		{name: "resend mobile unauthorized", method: ctl.ResendMobileOTP, code: http.StatusUnauthorized},
+		{name: "resend email server error", method: ctl.ResendEmailVerification, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},
+		{name: "resend mobile server error", method: ctl.ResendMobileOTP, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},
+		{name: "reset password unauthorized", method: ctl.ResetPassword, body: `{"new_password":"newpassword123"}`, code: http.StatusUnauthorized},
+		{name: "reset password server error", method: ctl.ResetPassword, body: `{"new_password":"newpassword123"}`, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},
+	}
+
+	for _, tc := range handlers {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			if tc.setup != nil {
+				tc.setup(c)
+			}
+			c.Request = httptest.NewRequest(http.MethodPost, "/test", bytes.NewBufferString(tc.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			tc.method(c)
+			if w.Code != tc.code {
+				t.Fatalf("expected %d, got %d", tc.code, w.Code)
+			}
+		})
+	}
+}

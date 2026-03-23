@@ -33,9 +33,10 @@ func (r *orderRepo) CreateOrder(ctx context.Context, order *domain.Order) error 
 			payment_method,
 			payment_status,
 			status,
+			cancellation_reason,
 			created_at,
 			updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
 		RETURNING created_at, updated_at;
 	`
 
@@ -50,6 +51,7 @@ func (r *orderRepo) CreateOrder(ctx context.Context, order *domain.Order) error 
 		order.PaymentMethod,
 		order.PaymentStatus,
 		order.Status,
+		order.CancellationReason,
 	)
 
 	return row.Scan(&order.CreatedAt, &order.UpdatedAt)
@@ -102,6 +104,7 @@ func (r *orderRepo) ListOrdersByUser(
 			payment_method,
 			payment_status,
 			status,
+			cancellation_reason,
 			created_at,
 			updated_at
 		FROM orders
@@ -127,6 +130,7 @@ func (r *orderRepo) ListOrdersByUser(
 			&order.PaymentMethod,
 			&order.PaymentStatus,
 			&order.Status,
+			&order.CancellationReason,
 			&order.CreatedAt,
 			&order.UpdatedAt,
 		); err != nil {
@@ -161,6 +165,7 @@ func (r *orderRepo) ListOrders(
 			payment_method,
 			payment_status,
 			status,
+			cancellation_reason,
 			created_at,
 			updated_at
 		FROM orders
@@ -185,6 +190,7 @@ func (r *orderRepo) ListOrders(
 			&order.PaymentMethod,
 			&order.PaymentStatus,
 			&order.Status,
+			&order.CancellationReason,
 			&order.CreatedAt,
 			&order.UpdatedAt,
 		); err != nil {
@@ -244,6 +250,7 @@ func (r *orderRepo) GetOrderByID(
 			payment_method,
 			payment_status,
 			status,
+			cancellation_reason,
 			created_at,
 			updated_at
 		FROM orders
@@ -259,6 +266,7 @@ func (r *orderRepo) GetOrderByID(
 		&order.PaymentMethod,
 		&order.PaymentStatus,
 		&order.Status,
+		&order.CancellationReason,
 		&order.CreatedAt,
 		&order.UpdatedAt,
 	)
@@ -331,10 +339,12 @@ func (r *orderRepo) UpdateOrderStatus(
 	ctx context.Context,
 	orderID uuid.UUID,
 	status domain.OrderStatus,
+	cancellationReason *string,
 ) error {
 	query, args, err := r.sb.
 		Update("orders").
 		Set("status", status).
+		Set("cancellation_reason", cancellationReason).
 		Set("updated_at", squirrel.Expr("NOW()")).
 		Where(squirrel.Eq{"id": orderID}).
 		ToSql()

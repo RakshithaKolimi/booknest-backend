@@ -13,6 +13,7 @@ func RegisterOrderRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, controll
 	{
 		protected.POST(routes.OrderCheckoutRoute, controller.Checkout)
 		protected.POST(routes.OrderConfirmRoute, controller.ConfirmPayment)
+		protected.POST(routes.OrderCancelRoute, controller.CancelOrder)
 		protected.GET(routes.OrdersRoute, controller.ListMyOrders)
 	}
 
@@ -20,5 +21,6 @@ func RegisterOrderRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, controll
 	admin.Use(middleware.JWTAuthMiddleware(jwtConfig), middleware.RequireAdmin())
 	{
 		admin.GET(routes.AdminOrdersRoute, controller.ListAllOrders)
+		admin.PUT(routes.AdminOrderStatusRoute, controller.AdminUpdateOrderStatus)
 	}
 }

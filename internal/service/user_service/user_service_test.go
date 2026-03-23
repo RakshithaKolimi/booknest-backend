@@ -273,6 +273,119 @@ func TestLogin_UpdatesLastLogin(t *testing.T) {
 	}
 }
 
+func TestRegister_Success(t *testing.T) {
+	createdUsers := 0
+	createdTokens := 0
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			CreateFunc: func(ctx context.Context, user *domain.User) error {
+				createdUsers++
+				if user.ID == uuid.Nil || user.Email != "jane@example.com" || user.Mobile != "+15555550123" {
+					t.Fatalf("unexpected user payload: %+v", user)
+				}
+				if user.Password == "" || user.Password == "password123" {
+					t.Fatalf("expected hashed password, got %q", user.Password)
+				}
+				return nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				createdTokens++
+				if token.UserID == uuid.Nil {
+					t.Fatalf("expected token user id")
+				}
+				if token.Type != domain.VerificationEmail && token.Type != domain.VerificationMobile {
+					t.Fatalf("unexpected token type: %s", token.Type)
+				}
+				if token.TokenHash == "" {
+					t.Fatalf("expected token hash")
+				}
+				return nil
+			},
+		},
+	}
+
+	err := service.Register(context.Background(), domain.UserInput{
+		FirstName: "Jane",
+		LastName:  "Doe",
+		Email:     "jane@example.com",
+		Mobile:    "+15555550123",
+		Password:  "password123",
+		Role:      domain.UserRoleUser,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if createdUsers != 1 || createdTokens != 2 {
+		t.Fatalf("expected 1 user and 2 tokens, got users=%d tokens=%d", createdUsers, createdTokens)
+	}
+}
+
+func TestRegister_StopsWhenUserCreateFails(t *testing.T) {
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			CreateFunc: func(ctx context.Context, user *domain.User) error {
+				return errors.New("create failed")
+			},
+		},
+		vtr: &MockVerificationTokenRepository{
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				t.Fatal("verification token should not be created when user creation fails")
+				return nil
+			},
+		},
+	}
+
+	err := service.Register(context.Background(), domain.UserInput{
+		FirstName: "Jane",
+		LastName:  "Doe",
+		Email:     "jane@example.com",
+		Mobile:    "+15555550123",
+		Password:  "password123",
+		Role:      domain.UserRoleUser,
+	})
+	if err == nil || err.Error() != "create failed" {
+		t.Fatalf("expected create failure, got %v", err)
+	}
+}
+
+func TestRegister_StopsWhenVerificationCreateFails(t *testing.T) {
+	createCalls := 0
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			CreateFunc: func(ctx context.Context, user *domain.User) error {
+				return nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				createCalls++
+				if createCalls == 1 {
+					return errors.New("token create failed")
+				}
+				return nil
+			},
+		},
+	}
+
+	err := service.Register(context.Background(), domain.UserInput{
+		FirstName: "Jane",
+		LastName:  "Doe",
+		Email:     "jane@example.com",
+		Mobile:    "+15555550123",
+		Password:  "password123",
+		Role:      domain.UserRoleUser,
+	})
+	if err == nil || err.Error() != "token create failed" {
+		t.Fatalf("expected token create failure, got %v", err)
+	}
+}
+
 // TestResetPassword_Success tests successful password reset
 // Note: This test requires a real DB pool and transaction support,
 // so it's skipped and should be tested through integration tests
@@ -535,6 +648,241 @@ func TestForgotPassword_ReturnsTokenAndInvalidatesOldOnEmail(t *testing.T) {
 	}
 }
 
+func TestResetPassword_SuccessUnit(t *testing.T) {
+	userID := uuid.New()
+	var updatedUser domain.User
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+				return domain.User{ID: userID, Password: "old"}, nil
+			},
+			UpdateFunc: func(ctx context.Context, user *domain.User) error {
+				updatedUser = *user
+				return nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{},
+	}
+
+	err := service.ResetPassword(context.Background(), userID, "newpassword123")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updatedUser.ID != userID || updatedUser.Password == "" || updatedUser.Password == "newpassword123" {
+		t.Fatalf("expected hashed password update, got %+v", updatedUser)
+	}
+}
+
+func TestResetPasswordWithToken_Success(t *testing.T) {
+	userID := uuid.New()
+	rawToken := "reset-token"
+	expiresAt := time.Now().Add(30 * time.Minute)
+	updateTokenCalled := false
+	invalidatedCalled := false
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+				return domain.User{ID: userID, Password: "old"}, nil
+			},
+			UpdateFunc: func(ctx context.Context, user *domain.User) error {
+				if user.Password == "" || user.Password == "newpassword123" {
+					t.Fatalf("expected hashed password, got %q", user.Password)
+				}
+				return nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{
+			FindByHashAndTypeFunc: func(ctx context.Context, tokenHash string, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
+				if tokenHash == "" || tokenType != domain.PasswordReset {
+					t.Fatalf("unexpected token lookup args")
+				}
+				return &domain.VerificationToken{UserID: userID, Type: domain.PasswordReset, ExpiresAt: expiresAt}, nil
+			},
+			UpdateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				updateTokenCalled = true
+				if !token.IsUsed || token.UsedAt == nil {
+					t.Fatalf("expected token to be marked used")
+				}
+				return nil
+			},
+			InvalidateByUserAndTypeFunc: func(ctx context.Context, gotUserID uuid.UUID, tokenType domain.VerificationTokenType) error {
+				invalidatedCalled = true
+				if gotUserID != userID || tokenType != domain.PasswordReset {
+					t.Fatalf("unexpected invalidation args")
+				}
+				return nil
+			},
+		},
+	}
+
+	err := service.ResetPasswordWithToken(context.Background(), rawToken, "newpassword123")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !updateTokenCalled || !invalidatedCalled {
+		t.Fatalf("expected token update and invalidation")
+	}
+}
+
+func TestResetPasswordWithToken_InvalidOrExpired(t *testing.T) {
+	userID := uuid.New()
+	tests := []struct {
+		name  string
+		token *domain.VerificationToken
+		err   error
+	}{
+		{name: "missing token", err: errors.New("not found")},
+		{name: "used token", token: &domain.VerificationToken{UserID: userID, Type: domain.PasswordReset, IsUsed: true, ExpiresAt: time.Now().Add(time.Hour)}},
+		{name: "expired token", token: &domain.VerificationToken{UserID: userID, Type: domain.PasswordReset, ExpiresAt: time.Now().Add(-time.Hour)}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &userService{
+				txm: &noopTransactionManager{},
+				r:   &MockUserRepository{},
+				vtr: &MockVerificationTokenRepository{
+					FindByHashAndTypeFunc: func(ctx context.Context, tokenHash string, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
+						if tc.err != nil {
+							return nil, tc.err
+						}
+						return tc.token, nil
+					},
+				},
+			}
+
+			err := service.ResetPasswordWithToken(context.Background(), "reset-token", "newpassword123")
+			if err == nil || err.Error() != "invalid or expired token" {
+				t.Fatalf("expected invalid or expired token error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestResendEmailVerification_SuccessAndAlreadyVerified(t *testing.T) {
+	userID := uuid.New()
+	tests := []struct {
+		name       string
+		user       domain.User
+		wantErr    string
+		wantCreate bool
+	}{
+		{
+			name:       "success",
+			user:       domain.User{ID: userID, Email: "jane@example.com"},
+			wantCreate: true,
+		},
+		{
+			name:    "already verified",
+			user:    domain.User{ID: userID, EmailVerified: true},
+			wantErr: "email already verified",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			created := 0
+			invalidated := 0
+			service := &userService{
+				txm: &noopTransactionManager{},
+				r: &MockUserRepository{
+					FindByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+						return tc.user, nil
+					},
+				},
+				vtr: &MockVerificationTokenRepository{
+					InvalidateByUserAndTypeFunc: func(ctx context.Context, gotUserID uuid.UUID, tokenType domain.VerificationTokenType) error {
+						invalidated++
+						return nil
+					},
+					CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+						created++
+						if token.Type != domain.VerificationEmail {
+							t.Fatalf("unexpected token type: %s", token.Type)
+						}
+						return nil
+					},
+				},
+			}
+
+			err := service.ResendEmailVerification(context.Background(), userID)
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+			if tc.wantErr != "" && (err == nil || err.Error() != tc.wantErr) {
+				t.Fatalf("expected error %q, got %v", tc.wantErr, err)
+			}
+			if tc.wantCreate && (created != 1 || invalidated != 1) {
+				t.Fatalf("expected create and invalidate once, got create=%d invalidate=%d", created, invalidated)
+			}
+		})
+	}
+}
+
+func TestResendMobileOTP_SuccessAndAlreadyVerified(t *testing.T) {
+	userID := uuid.New()
+	tests := []struct {
+		name       string
+		user       domain.User
+		wantErr    string
+		wantCreate bool
+	}{
+		{
+			name:       "success",
+			user:       domain.User{ID: userID, Mobile: "+15555550123"},
+			wantCreate: true,
+		},
+		{
+			name:    "already verified",
+			user:    domain.User{ID: userID, MobileVerified: true},
+			wantErr: "mobile already verified",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			created := 0
+			invalidated := 0
+			service := &userService{
+				txm: &noopTransactionManager{},
+				r: &MockUserRepository{
+					FindByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+						return tc.user, nil
+					},
+				},
+				vtr: &MockVerificationTokenRepository{
+					InvalidateByUserAndTypeFunc: func(ctx context.Context, gotUserID uuid.UUID, tokenType domain.VerificationTokenType) error {
+						invalidated++
+						return nil
+					},
+					CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+						created++
+						if token.Type != domain.VerificationMobile {
+							t.Fatalf("unexpected token type: %s", token.Type)
+						}
+						return nil
+					},
+				},
+			}
+
+			err := service.ResendMobileOTP(context.Background(), userID)
+			if tc.wantErr == "" && err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+			if tc.wantErr != "" && (err == nil || err.Error() != tc.wantErr) {
+				t.Fatalf("expected error %q, got %v", tc.wantErr, err)
+			}
+			if tc.wantCreate && (created != 1 || invalidated != 1) {
+				t.Fatalf("expected create and invalidate once, got create=%d invalidate=%d", created, invalidated)
+			}
+		})
+	}
+}
+
 func TestForgotPassword_AvoidsEnumerationWhenUserMissing(t *testing.T) {
 	service := &userService{
 		txm: &noopTransactionManager{},
@@ -775,22 +1123,22 @@ func TestLogin_InvalidatesAndStoresRefreshToken(t *testing.T) {
 				return nil
 			},
 		},
-			vtr: &MockVerificationTokenRepository{
-				FindByUserIDAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
-					if id != userID || tokenType != domain.RefreshToken {
-						t.Fatalf("unexpected find refresh token args")
-					}
-					return &domain.VerificationToken{
-						ID:     uuid.New(),
-						UserID: userID,
-						Type:   domain.RefreshToken,
-					}, nil
-				},
-				InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
-					invalidated = true
-					if id != userID || tokenType != domain.RefreshToken {
-						t.Fatalf("unexpected invalidation args")
-					}
+		vtr: &MockVerificationTokenRepository{
+			FindByUserIDAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
+				if id != userID || tokenType != domain.RefreshToken {
+					t.Fatalf("unexpected find refresh token args")
+				}
+				return &domain.VerificationToken{
+					ID:     uuid.New(),
+					UserID: userID,
+					Type:   domain.RefreshToken,
+				}, nil
+			},
+			InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
+				invalidated = true
+				if id != userID || tokenType != domain.RefreshToken {
+					t.Fatalf("unexpected invalidation args")
+				}
 				return nil
 			},
 			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
@@ -839,17 +1187,17 @@ func TestLogin_ReturnsErrorWhenRefreshInvalidationFails(t *testing.T) {
 			},
 			UpdateFunc: func(ctx context.Context, user *domain.User) error { return nil },
 		},
-			vtr: &MockVerificationTokenRepository{
-				FindByUserIDAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
-					return &domain.VerificationToken{
-						ID:     uuid.New(),
-						UserID: userID,
-						Type:   domain.RefreshToken,
-					}, nil
-				},
-				InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
-					return errors.New("invalidation failed")
-				},
+		vtr: &MockVerificationTokenRepository{
+			FindByUserIDAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) (*domain.VerificationToken, error) {
+				return &domain.VerificationToken{
+					ID:     uuid.New(),
+					UserID: userID,
+					Type:   domain.RefreshToken,
+				}, nil
+			},
+			InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
+				return errors.New("invalidation failed")
+			},
 			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
 				createCalled = true
 				return nil
@@ -942,8 +1290,8 @@ func TestRefresh_Success_RotatesToken(t *testing.T) {
 					Type:      domain.RefreshToken,
 					TokenHash: hash,
 					ExpiresAt: time.Now().Add(time.Hour),
-					}, nil
-				},
+				}, nil
+			},
 		},
 	}
 

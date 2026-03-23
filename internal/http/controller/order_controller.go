@@ -97,6 +97,44 @@ func (c *orderController) ConfirmPayment(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, order)
 }
 
+// CancelOrder godoc
+// @Summary      Cancel order
+// @Description  Cancels a pending order for the authenticated user
+// @Tags         Orders
+// @Accept       json
+// @Produce      json
+// @Param        payload  body  domain.OrderCancelInput  true  "Cancel order input"
+// @Success      200  {object}  domain.OrderView
+// @Failure      400  {object}  map[string]string
+// @Failure      401  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /orders/cancel [post]
+func (c *orderController) CancelOrder(ctx *gin.Context) {
+	userID, err := getUserID(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var input domain.OrderCancelInput
+	if err := ctx.ShouldBindJSON(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := sanitizeInput(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	order, err := c.service.CancelOrder(ctx, userID, input)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, order)
+}
+
 // ListMyOrders godoc
 // @Summary      List my orders
 // @Description  Lists orders for the authenticated user
@@ -162,4 +200,36 @@ func (c *orderController) ListAllOrders(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, orders)
+}
+
+// AdminUpdateOrderStatus godoc
+// @Summary      Update order status
+// @Description  Updates an order status as admin
+// @Tags         Orders
+// @Accept       json
+// @Produce      json
+// @Param        payload  body  domain.AdminOrderStatusUpdateInput  true  "Admin order status input"
+// @Success      200  {object}  domain.OrderView
+// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /admin/orders/status [put]
+func (c *orderController) AdminUpdateOrderStatus(ctx *gin.Context) {
+	var input domain.AdminOrderStatusUpdateInput
+	if err := ctx.ShouldBindJSON(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := sanitizeInput(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	order, err := c.service.AdminUpdateOrderStatus(ctx, input)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, order)
 }

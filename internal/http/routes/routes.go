@@ -30,10 +30,12 @@ const (
 	CartItemRoute  = "/cart/items/:book_id"
 	CartClearRoute = "/cart/clear"
 
-	OrdersRoute        = "/orders"
-	OrderCheckoutRoute = "/orders/checkout"
-	OrderConfirmRoute  = "/orders/confirm"
-	AdminOrdersRoute   = "/admin/orders"
+	OrdersRoute           = "/orders"
+	OrderCheckoutRoute    = "/orders/checkout"
+	OrderConfirmRoute     = "/orders/confirm"
+	OrderCancelRoute      = "/orders/cancel"
+	AdminOrdersRoute      = "/admin/orders"
+	AdminOrderStatusRoute = "/admin/orders/status"
 
 	AuthorsRoute    = "/authors"
 	AuthorByIDRoute = "/authors/:id"

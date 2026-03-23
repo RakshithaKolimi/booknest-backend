@@ -215,3 +215,51 @@ func TestPublisherControllerErrorPaths(t *testing.T) {
 		t.Fatalf("expected 404, got %d", uw.Code)
 	}
 }
+
+func TestPublisherControllerAdditionalErrorPaths(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	id := uuid.New()
+	ctl := NewPublisherController(&MockPublisherService{
+		ListFunc: func(ctx context.Context, limit, offset int, search string) ([]domain.Publisher, error) {
+			return nil, errors.New("boom")
+		},
+		CreateFunc: func(ctx context.Context, in domain.PublisherInput) (*domain.Publisher, error) {
+			return nil, errors.New("boom")
+		},
+		SetActiveFunc: func(ctx context.Context, id uuid.UUID, active bool) error { return errors.New("boom") },
+		DeleteFunc:    func(ctx context.Context, id uuid.UUID) error { return errors.New("boom") },
+	}).(*publisherController)
+
+	tests := []struct {
+		name   string
+		method func(*gin.Context)
+		setup  func(*gin.Context)
+		body   string
+		code   int
+	}{
+		{name: "list error", method: ctl.List, code: http.StatusInternalServerError},
+		{name: "create error", method: ctl.Create, body: `{"legal_name":"Legal","trading_name":"Trading","email":"test@mail.com","mobile":"+911234567890","address":"Addr","city":"City","state":"State","country":"Country","zipcode":"123456"}`, code: http.StatusInternalServerError},
+		{name: "update invalid id", method: ctl.Update, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad-id"}} }, body: `{}`, code: http.StatusBadRequest},
+		{name: "set active invalid id", method: ctl.SetActive, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad-id"}} }, body: `{"active":true}`, code: http.StatusBadRequest},
+		{name: "set active error", method: ctl.SetActive, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, body: `{"active":true}`, code: http.StatusInternalServerError},
+		{name: "delete invalid id", method: ctl.Delete, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad-id"}} }, code: http.StatusBadRequest},
+		{name: "delete error", method: ctl.Delete, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusInternalServerError},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			if tc.setup != nil {
+				tc.setup(c)
+			}
+			c.Request = httptest.NewRequest(http.MethodPost, "/test", bytes.NewBufferString(tc.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			tc.method(c)
+			if w.Code != tc.code {
+				t.Fatalf("expected %d, got %d", tc.code, w.Code)
+			}
+		})
+	}
+}

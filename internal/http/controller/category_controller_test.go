@@ -125,3 +125,86 @@ func TestCategoryControllerUpdateBadID(t *testing.T) {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
+
+func TestCategoryControllerUpdateAndDelete(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	id := uuid.New()
+	updated := false
+	deleted := false
+	svc := &mockCategoryService{
+		updateFunc: func(ctx context.Context, gotID uuid.UUID, input domain.CategoryInput) (*domain.Category, error) {
+			updated = true
+			return &domain.Category{ID: gotID, Name: input.Name}, nil
+		},
+		deleteFunc: func(ctx context.Context, gotID uuid.UUID) error {
+			deleted = true
+			return nil
+		},
+	}
+	ctl := NewCategoryController(svc).(*categoryController)
+
+	uw := httptest.NewRecorder()
+	uc, _ := gin.CreateTestContext(uw)
+	uc.Params = gin.Params{{Key: "id", Value: id.String()}}
+	uc.Request = httptest.NewRequest(http.MethodPut, "/categories/"+id.String(), bytes.NewBufferString(`{"name":"Updated"}`))
+	uc.Request.Header.Set("Content-Type", "application/json")
+	ctl.Update(uc)
+	if uw.Code != http.StatusOK || !updated {
+		t.Fatalf("expected update success, code=%d updated=%v", uw.Code, updated)
+	}
+
+	dw := httptest.NewRecorder()
+	dc, _ := gin.CreateTestContext(dw)
+	dc.Params = gin.Params{{Key: "id", Value: id.String()}}
+	dc.Request = httptest.NewRequest(http.MethodDelete, "/categories/"+id.String(), nil)
+	ctl.Delete(dc)
+	if dw.Code != http.StatusOK || !deleted {
+		t.Fatalf("expected delete success, code=%d deleted=%v", dw.Code, deleted)
+	}
+}
+
+func TestCategoryControllerDeleteAndCreateErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	id := uuid.New()
+	ctl := NewCategoryController(&mockCategoryService{
+		createFunc: func(ctx context.Context, input domain.CategoryInput) (*domain.Category, error) {
+			return nil, errors.New("create failed")
+		},
+		findByIDFunc: func(ctx context.Context, gotID uuid.UUID) (*domain.Category, error) {
+			return nil, errors.New("not found")
+		},
+		updateFunc: func(ctx context.Context, gotID uuid.UUID, input domain.CategoryInput) (*domain.Category, error) {
+			return nil, errors.New("update failed")
+		},
+		deleteFunc: func(ctx context.Context, gotID uuid.UUID) error { return errors.New("delete failed") },
+	}).(*categoryController)
+
+	tests := []struct {
+		name   string
+		method func(*gin.Context)
+		setup  func(*gin.Context)
+		body   string
+		code   int
+	}{
+		{name: "create error", method: ctl.Create, body: `{"name":"Fiction"}`, code: http.StatusBadRequest},
+		{name: "get not found", method: ctl.GetByID, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusNotFound},
+		{name: "update error", method: ctl.Update, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, body: `{"name":"Updated"}`, code: http.StatusBadRequest},
+		{name: "delete error", method: ctl.Delete, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusInternalServerError},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			if tc.setup != nil {
+				tc.setup(c)
+			}
+			c.Request = httptest.NewRequest(http.MethodPost, "/test", bytes.NewBufferString(tc.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+			tc.method(c)
+			if w.Code != tc.code {
+				t.Fatalf("expected %d, got %d", tc.code, w.Code)
+			}
+		})
+	}
+}

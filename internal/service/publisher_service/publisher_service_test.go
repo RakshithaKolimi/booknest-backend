@@ -202,3 +202,28 @@ func TestUpdatePublisher_NotFound(t *testing.T) {
 		t.Fatalf("expected error, got nil")
 	}
 }
+
+func TestNewPublisherServiceAndList(t *testing.T) {
+	expected := []domain.Publisher{{ID: uuid.New(), LegalName: "Legal"}}
+	mockRepo := &MockPublisherRepository{
+		ListFunc: func(ctx context.Context, limit, offset int, search string) ([]domain.Publisher, error) {
+			if limit != 10 || offset != 5 || search != "pub" {
+				t.Fatalf("unexpected list args: %d %d %q", limit, offset, search)
+			}
+			return expected, nil
+		},
+	}
+
+	service := NewPublisherService(mockRepo)
+	if service == nil {
+		t.Fatal("expected non-nil service")
+	}
+
+	publishers, err := service.List(context.Background(), 10, 5, "pub")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(publishers) != 1 || publishers[0].ID != expected[0].ID {
+		t.Fatalf("unexpected publishers: %+v", publishers)
+	}
+}

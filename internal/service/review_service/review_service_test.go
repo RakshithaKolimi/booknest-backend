@@ -48,7 +48,7 @@ func (s *stubOrderRepo) GetOrderItems(ctx context.Context, orderID uuid.UUID) ([
 func (s *stubOrderRepo) UpdateOrderPayment(ctx context.Context, orderID uuid.UUID, status domain.PaymentStatus, method domain.PaymentMethod) error {
 	return nil
 }
-func (s *stubOrderRepo) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status domain.OrderStatus) error {
+func (s *stubOrderRepo) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
 	return nil
 }
 func (s *stubOrderRepo) DecrementStock(ctx context.Context, items []domain.OrderItem) error {

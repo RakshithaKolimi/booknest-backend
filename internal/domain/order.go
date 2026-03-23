@@ -9,14 +9,15 @@ import (
 
 // Order defines the model for Order
 type Order struct {
-	ID            uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
-	OrderNumber   string         `gorm:"uniqueIndex;not null" json:"order_number"`
-	TotalPrice    float64        `gorm:"type:numeric(10,2)" json:"total_price"`
-	UserID        uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
-	User          User           `gorm:"foreignKey:UserID"`
-	PaymentMethod *PaymentMethod `gorm:"type:payment_method" json:"payment_method,omitempty"`
-	PaymentStatus *PaymentStatus `gorm:"type:payment_status" json:"payment_status,omitempty"`
-	Status        OrderStatus    `gorm:"type:order_status;default:PENDING" json:"status"`
+	ID                 uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
+	OrderNumber        string         `gorm:"uniqueIndex;not null" json:"order_number"`
+	TotalPrice         float64        `gorm:"type:numeric(10,2)" json:"total_price"`
+	UserID             uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
+	User               User           `gorm:"foreignKey:UserID"`
+	PaymentMethod      *PaymentMethod `gorm:"type:payment_method" json:"payment_method,omitempty"`
+	PaymentStatus      *PaymentStatus `gorm:"type:payment_status" json:"payment_status,omitempty"`
+	Status             OrderStatus    `gorm:"type:order_status;default:PENDING" json:"status"`
+	CancellationReason *string        `gorm:"type:text" json:"cancellation_reason,omitempty"`
 	BaseEntity
 } // @name Order
 
@@ -59,6 +60,20 @@ type PaymentConfirmInput struct {
 	Success bool      `json:"success"`
 } // @name PaymentConfirmInput
 
+// OrderCancelInput defines input model for user order cancellation
+type OrderCancelInput struct {
+	OrderID            uuid.UUID `json:"order_id" binding:"required"`
+	CancellationReason string    `json:"cancellation_reason" binding:"required"`
+} // @name OrderCancelInput
+
+// AdminOrderStatusUpdateInput defines input model for admin order status updates
+type AdminOrderStatusUpdateInput struct {
+	OrderID            uuid.UUID      `json:"order_id" binding:"required"`
+	Status             OrderStatus    `json:"status,omitempty"`
+	PaymentStatus      *PaymentStatus `json:"payment_status,omitempty"`
+	CancellationReason string         `json:"cancellation_reason,omitempty"`
+} // @name AdminOrderStatusUpdateInput
+
 type OrderRepository interface {
 	CreateOrder(ctx context.Context, order *Order) error
 	CreateOrderItems(ctx context.Context, items []OrderItem) error
@@ -68,13 +83,15 @@ type OrderRepository interface {
 	GetOrderByID(ctx context.Context, orderID uuid.UUID) (Order, error)
 	GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]OrderItemDetail, error)
 	UpdateOrderPayment(ctx context.Context, orderID uuid.UUID, status PaymentStatus, method PaymentMethod) error
-	UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status OrderStatus) error
+	UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status OrderStatus, cancellationReason *string) error
 	DecrementStock(ctx context.Context, items []OrderItem) error
 }
 
 type OrderService interface {
 	Checkout(ctx context.Context, userID uuid.UUID, input CheckoutInput) (OrderView, error)
 	ConfirmPayment(ctx context.Context, userID uuid.UUID, input PaymentConfirmInput) (OrderView, error)
+	CancelOrder(ctx context.Context, userID uuid.UUID, input OrderCancelInput) (OrderView, error)
+	AdminUpdateOrderStatus(ctx context.Context, input AdminOrderStatusUpdateInput) (OrderView, error)
 	ListUserOrders(ctx context.Context, userID uuid.UUID, limit, offset int) ([]OrderView, error)
 	ListAllOrders(ctx context.Context, limit, offset int) ([]OrderView, error)
 }
