@@ -195,6 +195,114 @@ func TestLogin_InvalidPassword(t *testing.T) {
 	}
 }
 
+func TestLogin_AdminRequiresVerification(t *testing.T) {
+	password := "password123"
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByEmailFunc: func(ctx context.Context, email string) (domain.User, error) {
+				return domain.User{
+					ID:             uuid.New(),
+					Email:          email,
+					Password:       (&userService{}).hashPassword(password),
+					Role:           domain.UserRoleAdmin,
+					EmailVerified:  false,
+					MobileVerified: false,
+				}, nil
+			},
+			UpdateFunc: func(ctx context.Context, user *domain.User) error {
+				t.Fatal("admin should not be updated when verification gate blocks login")
+				return nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				t.Fatal("refresh token should not be created for blocked admin login")
+				return nil
+			},
+		},
+	}
+
+	_, err := service.Login(context.Background(), domain.LoginInput{
+		Email:    "admin@example.com",
+		Password: password,
+	})
+	if !errors.Is(err, domain.ErrAdminVerificationRequired) {
+		t.Fatalf("expected admin verification error, got %v", err)
+	}
+}
+
+func TestLogin_AdminAllowedAfterEmailVerification(t *testing.T) {
+	password := "password123"
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByEmailFunc: func(ctx context.Context, email string) (domain.User, error) {
+				return domain.User{
+					ID:             uuid.New(),
+					Email:          email,
+					Password:       (&userService{}).hashPassword(password),
+					Role:           domain.UserRoleAdmin,
+					EmailVerified:  true,
+					MobileVerified: false,
+				}, nil
+			},
+			UpdateFunc: func(ctx context.Context, user *domain.User) error { return nil },
+		},
+		vtr: &MockVerificationTokenRepository{
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error { return nil },
+		},
+	}
+
+	tokens, err := service.Login(context.Background(), domain.LoginInput{
+		Email:    "admin@example.com",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("expected login success, got %v", err)
+	}
+	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
+		t.Fatalf("expected access and refresh tokens")
+	}
+}
+
+func TestLogin_AdminAllowedAfterMobileVerification(t *testing.T) {
+	password := "password123"
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByEmailFunc: func(ctx context.Context, email string) (domain.User, error) {
+				return domain.User{
+					ID:             uuid.New(),
+					Email:          email,
+					Password:       (&userService{}).hashPassword(password),
+					Role:           domain.UserRoleAdmin,
+					EmailVerified:  false,
+					MobileVerified: true,
+				}, nil
+			},
+			UpdateFunc: func(ctx context.Context, user *domain.User) error { return nil },
+		},
+		vtr: &MockVerificationTokenRepository{
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error { return nil },
+		},
+	}
+
+	tokens, err := service.Login(context.Background(), domain.LoginInput{
+		Email:    "admin@example.com",
+		Password: password,
+	})
+	if err != nil {
+		t.Fatalf("expected login success, got %v", err)
+	}
+	if tokens.AccessToken == "" || tokens.RefreshToken == "" {
+		t.Fatalf("expected access and refresh tokens")
+	}
+}
+
 // TestLogin_UserNotFound tests login when user doesn't exist
 func TestLogin_UserNotFound(t *testing.T) {
 	mockUserRepo := &MockUserRepository{
@@ -321,6 +429,67 @@ func TestRegister_Success(t *testing.T) {
 	}
 	if createdUsers != 1 || createdTokens != 2 {
 		t.Fatalf("expected 1 user and 2 tokens, got users=%d tokens=%d", createdUsers, createdTokens)
+	}
+}
+
+func TestRegister_RejectsAdminSelfRegistration(t *testing.T) {
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			CreateFunc: func(ctx context.Context, user *domain.User) error {
+				t.Fatal("user should not be created for public admin registration")
+				return nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{},
+	}
+
+	err := service.Register(context.Background(), domain.UserInput{
+		FirstName: "Admin",
+		LastName:  "User",
+		Email:     "admin@example.com",
+		Mobile:    "+15555550123",
+		Password:  "password123",
+		Role:      domain.UserRoleAdmin,
+	})
+	if !errors.Is(err, domain.ErrAdminSelfRegistrationNotAllowed) {
+		t.Fatalf("expected admin self registration error, got %v", err)
+	}
+}
+
+func TestRegisterAdmin_SetsAdminRole(t *testing.T) {
+	createdUsers := 0
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			CreateFunc: func(ctx context.Context, user *domain.User) error {
+				createdUsers++
+				if user.Role != domain.UserRoleAdmin {
+					t.Fatalf("expected admin role, got %s", user.Role)
+				}
+				return nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				return nil
+			},
+		},
+	}
+
+	err := service.RegisterAdmin(context.Background(), domain.AdminRegistrationInput{
+		FirstName: "Admin",
+		LastName:  "User",
+		Email:     "admin@example.com",
+		Mobile:    "+15555550123",
+		Password:  "password123",
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if createdUsers != 1 {
+		t.Fatalf("expected admin user create call, got %d", createdUsers)
 	}
 }
 

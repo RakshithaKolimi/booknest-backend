@@ -49,12 +49,49 @@ func (c *userController) Register(ctx *gin.Context) {
 	}
 
 	if err := c.service.Register(ctx, input); err != nil {
+		if errors.Is(err, domain.ErrAdminSelfRegistrationNotAllowed) {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	ctx.JSON(http.StatusCreated, gin.H{
 		"message": "User registered successfully. Please verify your email and mobile.",
+	})
+}
+
+// RegisterAdmin godoc
+// @Summary      Register a new admin
+// @Description  Creates a new admin account through the API and sends email & mobile verification
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Param        payload  body  domain.AdminRegistrationInput  true  "Admin registration input"
+// @Success      201  {object}  map[string]string
+// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /auth/register-admin [post]
+func (c *userController) RegisterAdmin(ctx *gin.Context) {
+	var input domain.AdminRegistrationInput
+
+	if err := ctx.ShouldBindJSON(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := sanitizeInput(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := c.service.RegisterAdmin(ctx, input); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, gin.H{
+		"message": "Admin registered successfully. Please verify email or mobile before login.",
 	})
 }
 
@@ -89,6 +126,10 @@ func (c *userController) Login(ctx *gin.Context) {
 
 	tokens, err := c.service.Login(ctx, input)
 	if err != nil {
+		if errors.Is(err, domain.ErrAdminVerificationRequired) {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}

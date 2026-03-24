@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -34,6 +35,19 @@ type UserInput struct {
 	Role      UserRole `json:"role" binding:"required"`
 } // @name UserInput
 
+type AdminRegistrationInput struct {
+	FirstName string `json:"first_name" binding:"required,min=3"`
+	LastName  string `json:"last_name" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Mobile    string `json:"mobile" binding:"required,e164"`
+	Password  string `json:"password" binding:"required,min=6"`
+} // @name AdminRegistrationInput
+
+var (
+	ErrAdminSelfRegistrationNotAllowed = errors.New("admin registration is not allowed from the public register portal")
+	ErrAdminVerificationRequired       = errors.New("admin must verify email or mobile before login")
+)
+
 // ForgotPasswordInput is used for forgot password
 type ForgotPasswordInput struct {
 	Email  string `json:"email"`
@@ -64,6 +78,7 @@ type UserRepository interface {
 type UserService interface {
 	FindUser(ctx context.Context, id uuid.UUID) (User, error)
 	Register(ctx context.Context, in UserInput) error
+	RegisterAdmin(ctx context.Context, in AdminRegistrationInput) error
 	Login(ctx context.Context, in LoginInput) (tokens AuthTokens, err error)
 	Refresh(ctx context.Context, rawRefreshToken string) (accessToken string, err error)
 	ForgotPassword(ctx context.Context, in ForgotPasswordInput) (string, error)

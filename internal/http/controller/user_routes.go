@@ -13,6 +13,7 @@ func RegisterUserRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, rdb *redi
 	auth.Use(middleware.LoginRateLimiter(rdb))
 	{
 		auth.POST(routes.RegisterRoute, controller.Register)
+		auth.POST(routes.RegisterAdminRoute, controller.RegisterAdmin)
 		auth.POST(routes.LoginRoute, controller.Login)
 		auth.POST(routes.RefreshRoute, controller.Refresh)
 		auth.POST(routes.ForgotPassword, controller.ForgotPassword)

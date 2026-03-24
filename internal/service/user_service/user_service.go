@@ -35,6 +35,31 @@ func (s *userService) Register(
 	ctx context.Context,
 	in domain.UserInput,
 ) error {
+	if in.Role == domain.UserRoleAdmin {
+		return domain.ErrAdminSelfRegistrationNotAllowed
+	}
+
+	return s.registerWithRole(ctx, in)
+}
+
+func (s *userService) RegisterAdmin(
+	ctx context.Context,
+	in domain.AdminRegistrationInput,
+) error {
+	return s.registerWithRole(ctx, domain.UserInput{
+		FirstName: in.FirstName,
+		LastName:  in.LastName,
+		Email:     in.Email,
+		Mobile:    in.Mobile,
+		Password:  in.Password,
+		Role:      domain.UserRoleAdmin,
+	})
+}
+
+func (s *userService) registerWithRole(
+	ctx context.Context,
+	in domain.UserInput,
+) error {
 	var emailToken *domain.VerificationToken
 	var mobileOTP string
 
@@ -127,6 +152,10 @@ func (s *userService) Login(
 	// Validate the password
 	if !s.comparePassword(user.Password, in.Password) {
 		return domain.AuthTokens{}, errors.New("invalid credentials")
+	}
+
+	if user.Role == domain.UserRoleAdmin && !user.EmailVerified && !user.MobileVerified {
+		return domain.AuthTokens{}, domain.ErrAdminVerificationRequired
 	}
 
 	var tokens domain.AuthTokens

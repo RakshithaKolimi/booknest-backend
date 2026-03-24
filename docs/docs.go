@@ -81,6 +81,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/orders/status": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Updates an order status as admin",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Update order status",
+                "parameters": [
+                    {
+                        "description": "Admin order status input",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AdminOrderStatusUpdateInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/OrderView"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/forgot-password": {
             "post": {
                 "description": "Sends password reset link or OTP to email/mobile",
@@ -182,6 +239,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/refresh": {
+            "post": {
+                "description": "Exchanges a valid refresh token for a new access token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Refresh access token",
+                "parameters": [
+                    {
+                        "description": "Refresh token payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/register": {
             "post": {
                 "description": "Creates a new user account and sends email \u0026 mobile verification",
@@ -203,6 +318,61 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/UserInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register-admin": {
+            "post": {
+                "description": "Creates a new admin account through the API and sends email \u0026 mobile verification",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Register a new admin",
+                "parameters": [
+                    {
+                        "description": "Admin registration input",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/AdminRegistrationInput"
                         }
                     }
                 ],
@@ -904,6 +1074,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/books/search": {
+            "get": {
+                "description": "Supports offset and cursor based pagination with catalog filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Books"
+                ],
+                "summary": "Query books with filters and pagination",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Result limit (default 12, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Result offset (offset mode)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Opaque cursor (cursor mode)",
+                        "name": "cursor",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BookSearchResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/books/{id}": {
             "get": {
                 "description": "Fetches a single book by its ID",
@@ -941,6 +1169,133 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/books/{id}/reviews": {
+            "get": {
+                "description": "Returns all reviews for a specific book with summary stats",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "List book reviews",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Book ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ReviewListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates or updates the current user's review for a specific book",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reviews"
+                ],
+                "summary": "Create or update a review",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Book ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Review input",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ReviewInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Review"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1254,6 +1609,63 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cancels a pending order for the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Cancel order",
+                "parameters": [
+                    {
+                        "description": "Cancel order input",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/OrderCancelInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/OrderView"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1806,6 +2218,55 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "AdminOrderStatusUpdateInput": {
+            "type": "object",
+            "required": [
+                "order_id"
+            ],
+            "properties": {
+                "cancellation_reason": {
+                    "type": "string"
+                },
+                "order_id": {
+                    "type": "string"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/PaymentStatus"
+                },
+                "status": {
+                    "$ref": "#/definitions/domain.OrderStatus"
+                }
+            }
+        },
+        "AdminRegistrationInput": {
+            "type": "object",
+            "required": [
+                "email",
+                "first_name",
+                "last_name",
+                "mobile",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string",
+                    "minLength": 3
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "mobile": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string",
+                    "minLength": 6
+                }
+            }
+        },
         "Author": {
             "type": "object",
             "properties": {
@@ -1900,13 +2361,13 @@ const docTemplate = `{
         "BookFilter": {
             "type": "object",
             "properties": {
-                "authorIDs": {
+                "author_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
-                "categoryIDs": {
+                "category_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -1918,21 +2379,19 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "isActive": {
+                "is_active": {
                     "type": "boolean"
                 },
-                "maxPrice": {
-                    "type": "number",
-                    "format": "float64"
+                "max_price": {
+                    "type": "number"
                 },
-                "minPrice": {
-                    "type": "number",
-                    "format": "float64"
+                "min_price": {
+                    "type": "number"
                 },
-                "minStock": {
+                "min_stock": {
                     "type": "integer"
                 },
-                "publisherIDs": {
+                "publisher_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -1996,6 +2455,9 @@ const docTemplate = `{
         "BookSearchResult": {
             "type": "object",
             "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
                 "items": {
                     "type": "array",
                     "items": {
@@ -2004,6 +2466,9 @@ const docTemplate = `{
                 },
                 "limit": {
                     "type": "integer"
+                },
+                "next_cursor": {
+                    "type": "string"
                 },
                 "offset": {
                     "type": "integer"
@@ -2140,6 +2605,9 @@ const docTemplate = `{
         "Order": {
             "type": "object",
             "properties": {
+                "cancellation_reason": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -2171,6 +2639,21 @@ const docTemplate = `{
                     "$ref": "#/definitions/User"
                 },
                 "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "OrderCancelInput": {
+            "type": "object",
+            "required": [
+                "cancellation_reason",
+                "order_id"
+            ],
+            "properties": {
+                "cancellation_reason": {
+                    "type": "string"
+                },
+                "order_id": {
                     "type": "string"
                 }
             }
@@ -2231,12 +2714,14 @@ const docTemplate = `{
             "enum": [
                 "PENDING",
                 "PAID",
+                "REFUND_INITIATED",
                 "REFUNDED",
                 "FAILED"
             ],
             "x-enum-varnames": [
                 "PaymentPending",
                 "PaymentPaid",
+                "PaymentRefundInitiated",
                 "PaymentRefunded",
                 "PaymentFailed"
             ]
@@ -2334,6 +2819,82 @@ const docTemplate = `{
                 }
             }
         },
+        "Review": {
+            "type": "object",
+            "properties": {
+                "book": {
+                    "$ref": "#/definitions/Book"
+                },
+                "book_id": {
+                    "type": "string"
+                },
+                "comment": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "rating": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/User"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "ReviewInput": {
+            "type": "object",
+            "required": [
+                "rating"
+            ],
+            "properties": {
+                "comment": {
+                    "type": "string"
+                },
+                "rating": {
+                    "type": "integer",
+                    "maximum": 5,
+                    "minimum": 1
+                }
+            }
+        },
+        "ReviewListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Review"
+                    }
+                },
+                "summary": {
+                    "$ref": "#/definitions/ReviewSummary"
+                }
+            }
+        },
+        "ReviewSummary": {
+            "type": "object",
+            "properties": {
+                "average_rating": {
+                    "type": "number"
+                },
+                "total_reviews": {
+                    "type": "integer"
+                }
+            }
+        },
         "User": {
             "type": "object",
             "properties": {
@@ -2426,11 +2987,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "PENDING",
+                "FAILED",
                 "CANCELLED",
                 "COMPLETED"
             ],
             "x-enum-varnames": [
                 "OrderPending",
+                "OrderFailed",
                 "OrderCancelled",
                 "OrderCompleted"
             ]

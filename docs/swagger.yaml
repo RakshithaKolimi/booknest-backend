@@ -2,6 +2,40 @@ basePath: /api/v1
 consumes:
 - application/json
 definitions:
+  AdminOrderStatusUpdateInput:
+    properties:
+      cancellation_reason:
+        type: string
+      order_id:
+        type: string
+      payment_status:
+        $ref: '#/definitions/PaymentStatus'
+      status:
+        $ref: '#/definitions/domain.OrderStatus'
+    required:
+    - order_id
+    type: object
+  AdminRegistrationInput:
+    properties:
+      email:
+        type: string
+      first_name:
+        minLength: 3
+        type: string
+      last_name:
+        type: string
+      mobile:
+        type: string
+      password:
+        minLength: 6
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - mobile
+    - password
+    type: object
   Author:
     properties:
       created_at:
@@ -64,11 +98,11 @@ definitions:
     type: object
   BookFilter:
     properties:
-      authorIDs:
+      author_ids:
         items:
           type: string
         type: array
-      categoryIDs:
+      category_ids:
         items:
           type: string
         type: array
@@ -76,17 +110,15 @@ definitions:
         items:
           type: string
         type: array
-      isActive:
+      is_active:
         type: boolean
-      maxPrice:
-        format: float64
+      max_price:
         type: number
-      minPrice:
-        format: float64
+      min_price:
         type: number
-      minStock:
+      min_stock:
         type: integer
-      publisherIDs:
+      publisher_ids:
         items:
           type: string
         type: array
@@ -129,12 +161,16 @@ definitions:
     type: object
   BookSearchResult:
     properties:
+      has_more:
+        type: boolean
       items:
         items:
           $ref: '#/definitions/Book'
         type: array
       limit:
         type: integer
+      next_cursor:
+        type: string
       offset:
         type: integer
       total:
@@ -223,6 +259,8 @@ definitions:
     type: object
   Order:
     properties:
+      cancellation_reason:
+        type: string
       created_at:
         type: string
       deleted_at:
@@ -245,6 +283,16 @@ definitions:
         $ref: '#/definitions/User'
       user_id:
         type: string
+    type: object
+  OrderCancelInput:
+    properties:
+      cancellation_reason:
+        type: string
+      order_id:
+        type: string
+    required:
+    - cancellation_reason
+    - order_id
     type: object
   OrderItemDetail:
     properties:
@@ -283,12 +331,14 @@ definitions:
     enum:
     - PENDING
     - PAID
+    - REFUND_INITIATED
     - REFUNDED
     - FAILED
     type: string
     x-enum-varnames:
     - PaymentPending
     - PaymentPaid
+    - PaymentRefundInitiated
     - PaymentRefunded
     - PaymentFailed
   Publisher:
@@ -356,6 +406,56 @@ definitions:
     - trading_name
     - zipcode
     type: object
+  Review:
+    properties:
+      book:
+        $ref: '#/definitions/Book'
+      book_id:
+        type: string
+      comment:
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      rating:
+        type: integer
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/User'
+      user_id:
+        type: string
+    type: object
+  ReviewInput:
+    properties:
+      comment:
+        type: string
+      rating:
+        maximum: 5
+        minimum: 1
+        type: integer
+    required:
+    - rating
+    type: object
+  ReviewListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/Review'
+        type: array
+      summary:
+        $ref: '#/definitions/ReviewSummary'
+    type: object
+  ReviewSummary:
+    properties:
+      average_rating:
+        type: number
+      total_reviews:
+        type: integer
+    type: object
   User:
     properties:
       created_at:
@@ -420,11 +520,13 @@ definitions:
   domain.OrderStatus:
     enum:
     - PENDING
+    - FAILED
     - CANCELLED
     - COMPLETED
     type: string
     x-enum-varnames:
     - OrderPending
+    - OrderFailed
     - OrderCancelled
     - OrderCompleted
   domain.PaymentMethod:
@@ -486,6 +588,42 @@ paths:
       security:
       - BearerAuth: []
       summary: List all orders
+      tags:
+      - Orders
+  /admin/orders/status:
+    put:
+      consumes:
+      - application/json
+      description: Updates an order status as admin
+      parameters:
+      - description: Admin order status input
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/AdminOrderStatusUpdateInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/OrderView'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update order status
       tags:
       - Orders
   /auth/forgot-password:
@@ -554,6 +692,44 @@ paths:
       summary: Login user
       tags:
       - Auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchanges a valid refresh token for a new access token
+      parameters:
+      - description: Refresh token payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh access token
+      tags:
+      - Auth
   /auth/register:
     post:
       consumes:
@@ -588,6 +764,43 @@ paths:
               type: string
             type: object
       summary: Register a new user
+      tags:
+      - Auth
+  /auth/register-admin:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new admin account through the API and sends email & mobile
+        verification
+      parameters:
+      - description: Admin registration input
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/AdminRegistrationInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a new admin
       tags:
       - Auth
   /auth/resend-email-verification:
@@ -1005,6 +1218,89 @@ paths:
       summary: Get book by ID
       tags:
       - Books
+  /books/{id}/reviews:
+    get:
+      description: Returns all reviews for a specific book with summary stats
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ReviewListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List book reviews
+      tags:
+      - Reviews
+    post:
+      consumes:
+      - application/json
+      description: Creates or updates the current user's review for a specific book
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Review input
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/ReviewInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/Review'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create or update a review
+      tags:
+      - Reviews
   /books/filter:
     post:
       consumes:
@@ -1048,6 +1344,44 @@ paths:
               type: string
             type: object
       summary: Filter books
+      tags:
+      - Books
+  /books/search:
+    get:
+      description: Supports offset and cursor based pagination with catalog filters
+      parameters:
+      - description: Result limit (default 12, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Result offset (offset mode)
+        in: query
+        name: offset
+        type: integer
+      - description: Opaque cursor (cursor mode)
+        in: query
+        name: cursor
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BookSearchResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Query books with filters and pagination
       tags:
       - Books
   /cart:
@@ -1246,6 +1580,42 @@ paths:
       security:
       - BearerAuth: []
       summary: List my orders
+      tags:
+      - Orders
+  /orders/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancels a pending order for the authenticated user
+      parameters:
+      - description: Cancel order input
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/OrderCancelInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/OrderView'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cancel order
       tags:
       - Orders
   /orders/checkout:

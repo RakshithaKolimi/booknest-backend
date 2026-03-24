@@ -104,6 +104,11 @@ func (r *bookRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Bo
 	if err != nil {
 		return nil, err
 	}
+	books := []domain.Book{book}
+	if err := r.hydrateBookReviewSummaries(ctx, books); err != nil {
+		return nil, err
+	}
+	book = books[0]
 	return &book, nil
 }
 
@@ -219,6 +224,9 @@ func (r *bookRepository) QueryBooks(
 		if err := r.hydrateBooksWithRelations(ctx, books); err != nil {
 			return nil, 0, nil, false, err
 		}
+		if err := r.hydrateBookReviewSummaries(ctx, books); err != nil {
+			return nil, 0, nil, false, err
+		}
 	}
 
 	var nextCursor *string
@@ -240,7 +248,13 @@ func (r *bookRepository) List(ctx context.Context, limit, offset int) ([]domain.
 		Offset(offset).
 		Order("created_at DESC").
 		Find(&books).Error
-	return books, err
+	if err != nil {
+		return nil, err
+	}
+	if err := r.hydrateBookReviewSummaries(ctx, books); err != nil {
+		return nil, err
+	}
+	return books, nil
 }
 
 func (r *bookRepository) Update(ctx context.Context, book *domain.Book) error {
@@ -520,6 +534,51 @@ func (r *bookRepository) hydrateBooksWithRelations(ctx context.Context, books []
 			books[i].Author = hydratedBook.Author
 			books[i].Publisher = hydratedBook.Publisher
 			books[i].Categories = hydratedBook.Categories
+		}
+	}
+
+	return nil
+}
+
+func (r *bookRepository) hydrateBookReviewSummaries(ctx context.Context, books []domain.Book) error {
+	if len(books) == 0 {
+		return nil
+	}
+	if !r.db.WithContext(ctx).Migrator().HasTable("reviews") {
+		return nil
+	}
+
+	ids := make([]uuid.UUID, 0, len(books))
+	for _, book := range books {
+		ids = append(ids, book.ID)
+	}
+
+	type reviewAggregate struct {
+		BookID        uuid.UUID
+		AverageRating float64
+		TotalReviews  int64
+	}
+
+	var aggregates []reviewAggregate
+	if err := r.db.WithContext(ctx).
+		Table("reviews").
+		Select("book_id, COALESCE(AVG(rating), 0) AS average_rating, COUNT(*) AS total_reviews").
+		Where("book_id IN ?", ids).
+		Where("deleted_at IS NULL").
+		Group("book_id").
+		Scan(&aggregates).Error; err != nil {
+		return err
+	}
+
+	aggregateByBookID := make(map[uuid.UUID]reviewAggregate, len(aggregates))
+	for _, aggregate := range aggregates {
+		aggregateByBookID[aggregate.BookID] = aggregate
+	}
+
+	for i := range books {
+		if aggregate, ok := aggregateByBookID[books[i].ID]; ok {
+			books[i].AverageRating = aggregate.AverageRating
+			books[i].TotalReviews = aggregate.TotalReviews
 		}
 	}
 

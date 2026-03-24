@@ -18,6 +18,7 @@ const (
 	LoginRoute           = "/login"
 	RefreshRoute         = "/refresh"
 	RegisterRoute        = "/register"
+	RegisterAdminRoute   = "/register-admin"
 	VerifyEmailRoute     = "/verify-email"
 	VerifyMobileRoute    = "/verify-mobile"
 	ResendEmailRoute     = "/resend-email-verification"

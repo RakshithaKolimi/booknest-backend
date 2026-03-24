@@ -19,6 +19,7 @@ import (
 type MockUserService struct {
 	FindUserFunc                func(ctx context.Context, id uuid.UUID) (domain.User, error)
 	RegisterFunc                func(ctx context.Context, in domain.UserInput) error
+	RegisterAdminFunc           func(ctx context.Context, in domain.AdminRegistrationInput) error
 	LoginFunc                   func(ctx context.Context, in domain.LoginInput) (domain.AuthTokens, error)
 	RefreshFunc                 func(ctx context.Context, rawRefreshToken string) (string, error)
 	ForgotPasswordFunc          func(ctx context.Context, in domain.ForgotPasswordInput) (string, error)
@@ -42,6 +43,13 @@ func (m *MockUserService) FindUser(ctx context.Context, id uuid.UUID) (domain.Us
 func (m *MockUserService) Register(ctx context.Context, in domain.UserInput) error {
 	if m.RegisterFunc != nil {
 		return m.RegisterFunc(ctx, in)
+	}
+	return errors.New("not implemented")
+}
+
+func (m *MockUserService) RegisterAdmin(ctx context.Context, in domain.AdminRegistrationInput) error {
+	if m.RegisterAdminFunc != nil {
+		return m.RegisterAdminFunc(ctx, in)
 	}
 	return errors.New("not implemented")
 }
@@ -185,6 +193,35 @@ func TestLogin_InvalidCredentials(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestLogin_AdminVerificationRequired(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockService := &MockUserService{
+		LoginFunc: func(ctx context.Context, in domain.LoginInput) (domain.AuthTokens, error) {
+			return domain.AuthTokens{}, domain.ErrAdminVerificationRequired
+		},
+	}
+
+	controller := NewUserController(mockService)
+	router := gin.New()
+	controller.RegisterRoutes(router)
+
+	input := domain.LoginInput{
+		Email:    "admin@example.com",
+		Password: "password123",
+	}
+
+	body, _ := json.Marshal(input)
+	req := httptest.NewRequest("POST", "/login", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
 	}
 }
 
@@ -556,6 +593,64 @@ func TestUserControllerRegisterErrorDirect(t *testing.T) {
 	ctl.Register(c)
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestUserControllerRegisterRejectsAdminDirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctl := NewUserController(&MockUserService{
+		RegisterFunc: func(ctx context.Context, in domain.UserInput) error {
+			return domain.ErrAdminSelfRegistrationNotAllowed
+		},
+	}).(*userController)
+
+	body, _ := json.Marshal(domain.UserInput{
+		FirstName: "Admin",
+		LastName:  "User",
+		Email:     "admin@example.com",
+		Mobile:    "+15555550123",
+		Password:  "password123",
+		Role:      domain.UserRoleAdmin,
+	})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/register", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	ctl.Register(c)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestUserControllerRegisterAdminDirect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	ctl := NewUserController(&MockUserService{
+		RegisterAdminFunc: func(ctx context.Context, in domain.AdminRegistrationInput) error {
+			called = true
+			if in.Email != "admin@example.com" {
+				t.Fatalf("unexpected input: %+v", in)
+			}
+			return nil
+		},
+	}).(*userController)
+
+	body, _ := json.Marshal(domain.AdminRegistrationInput{
+		FirstName: "Admin",
+		LastName:  "User",
+		Email:     "admin@example.com",
+		Mobile:    "+15555550123",
+		Password:  "password123",
+	})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/register-admin", bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	ctl.RegisterAdmin(c)
+	if w.Code != http.StatusCreated || !called {
+		t.Fatalf("expected register admin success, code=%d called=%v", w.Code, called)
 	}
 }
 

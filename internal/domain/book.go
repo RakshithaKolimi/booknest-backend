@@ -31,6 +31,8 @@ type Book struct {
 	PublisherID        uuid.UUID  `gorm:"type:uuid;not null;index" json:"publisher_id"`
 	Publisher          Publisher  `gorm:"foreignKey:PublisherID"`
 	Categories         []Category `gorm:"many2many:book_categories;" json:"categories,omitempty"`
+	AverageRating      float64    `gorm:"-" json:"average_rating"`
+	TotalReviews       int64      `gorm:"-" json:"total_reviews"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 	DeletedAt          *time.Time `json:"deleted_at,omitempty"`
