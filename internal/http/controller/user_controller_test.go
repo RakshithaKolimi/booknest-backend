@@ -742,9 +742,9 @@ func TestUserControllerVerifyAndResetDirect(t *testing.T) {
 			}
 			return nil
 		},
-		ResendEmailVerificationFunc: func(ctx context.Context, gotUserID uuid.UUID) error {
-			if gotUserID != userID {
-				t.Fatalf("unexpected resend email user id")
+		ResendEmailVerificationByEmailFunc: func(ctx context.Context, email string) error {
+			if email != "reader@example.com" {
+				t.Fatalf("unexpected resend email input: %q", email)
 			}
 			return nil
 		},
@@ -765,7 +765,7 @@ func TestUserControllerVerifyAndResetDirect(t *testing.T) {
 		{name: "verify email", method: ctl.VerifyEmail, body: `{"token":"email-token"}`},
 		{name: "verify mobile", method: ctl.VerifyMobile, body: `{"otp":"123456"}`},
 		{name: "reset password", method: ctl.ResetPassword, body: `{"new_password":"newpassword123"}`, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }},
-		{name: "resend email", method: ctl.ResendEmailVerification, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }},
+		{name: "resend email", method: ctl.ResendEmailVerification, body: `{"email":"reader@example.com"}`},
 		{name: "resend mobile", method: ctl.ResendMobileOTP, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }},
 	}
 
@@ -796,11 +796,11 @@ func TestUserControllerHandlerErrorsDirect(t *testing.T) {
 		ResetPasswordWithTokenFunc: func(ctx context.Context, rawToken, newPassword string) error {
 			return errors.New("invalid token")
 		},
-		VerifyEmailFunc:             func(ctx context.Context, rawToken string) error { return errors.New("bad token") },
-		VerifyMobileFunc:            func(ctx context.Context, otp string) error { return errors.New("bad otp") },
-		ResendEmailVerificationFunc: func(ctx context.Context, gotUserID uuid.UUID) error { return errors.New("boom") },
-		ResendMobileOTPFunc:         func(ctx context.Context, gotUserID uuid.UUID) error { return errors.New("boom") },
-		ResetPasswordFunc:           func(ctx context.Context, gotUserID uuid.UUID, newPassword string) error { return errors.New("boom") },
+		VerifyEmailFunc:                    func(ctx context.Context, rawToken string) error { return errors.New("bad token") },
+		VerifyMobileFunc:                   func(ctx context.Context, otp string) error { return errors.New("bad otp") },
+		ResendEmailVerificationByEmailFunc: func(ctx context.Context, email string) error { return errors.New("boom") },
+		ResendMobileOTPFunc:                func(ctx context.Context, gotUserID uuid.UUID) error { return errors.New("boom") },
+		ResetPasswordFunc:                  func(ctx context.Context, gotUserID uuid.UUID, newPassword string) error { return errors.New("boom") },
 	}).(*userController)
 
 	t.Run("get user invalid id", func(t *testing.T) {
@@ -847,7 +847,7 @@ func TestUserControllerHandlerErrorsDirect(t *testing.T) {
 		{name: "verify mobile error", method: ctl.VerifyMobile, body: `{"otp":"bad"}`, code: http.StatusBadRequest},
 		{name: "resend email missing email", method: ctl.ResendEmailVerification, code: http.StatusBadRequest},
 		{name: "resend mobile unauthorized", method: ctl.ResendMobileOTP, code: http.StatusUnauthorized},
-		{name: "resend email server error", method: ctl.ResendEmailVerification, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},
+		{name: "resend email server error", method: ctl.ResendEmailVerification, body: `{"email":"reader@example.com"}`, code: http.StatusInternalServerError},
 		{name: "resend mobile server error", method: ctl.ResendMobileOTP, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},
 		{name: "reset password unauthorized", method: ctl.ResetPassword, body: `{"new_password":"newpassword123"}`, code: http.StatusUnauthorized},
 		{name: "reset password server error", method: ctl.ResetPassword, body: `{"new_password":"newpassword123"}`, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},
