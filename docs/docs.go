@@ -2311,6 +2311,9 @@ const docTemplate = `{
                 "available_stock": {
                     "type": "integer"
                 },
+                "average_rating": {
+                    "type": "number"
+                },
                 "categories": {
                     "type": "array",
                     "items": {
@@ -2352,6 +2355,9 @@ const docTemplate = `{
                 },
                 "publisher_id": {
                     "type": "string"
+                },
+                "total_reviews": {
+                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "string"

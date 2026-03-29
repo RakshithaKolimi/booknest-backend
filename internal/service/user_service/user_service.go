@@ -11,9 +11,10 @@ import (
 )
 
 type userService struct {
-	txm domain.TransactionManager
-	r   domain.UserRepository
-	vtr domain.VerificationTokenRepository
+	txm          domain.TransactionManager
+	r            domain.UserRepository
+	vtr          domain.VerificationTokenRepository
+	notification domain.NotificationService
 }
 
 func NewUserService(txm domain.TransactionManager, r domain.UserRepository, vtr domain.VerificationTokenRepository) domain.UserService {
@@ -21,6 +22,20 @@ func NewUserService(txm domain.TransactionManager, r domain.UserRepository, vtr 
 		txm: txm,
 		r:   r,
 		vtr: vtr,
+	}
+}
+
+func NewUserServiceWithNotification(
+	txm domain.TransactionManager,
+	r domain.UserRepository,
+	vtr domain.VerificationTokenRepository,
+	notification domain.NotificationService,
+) domain.UserService {
+	return &userService{
+		txm:          txm,
+		r:            r,
+		vtr:          vtr,
+		notification: notification,
 	}
 }
 
@@ -60,7 +75,7 @@ func (s *userService) registerWithRole(
 	ctx context.Context,
 	in domain.UserInput,
 ) error {
-	var emailToken *domain.VerificationToken
+	var emailToken string
 	var mobileOTP string
 
 	// Use transaction for user registration
@@ -101,7 +116,7 @@ func (s *userService) registerWithRole(
 			return err
 		}
 		// Assign to outer variable for sending email after transaction
-		emailToken = token
+		emailToken = verificationCode
 
 		// Create mobile OTP
 		mobileOTP = s.generateOTP(6)
@@ -121,7 +136,7 @@ func (s *userService) registerWithRole(
 	}
 
 	go func() {
-		s.sendEmailVerification(in.Email, *emailToken)
+		s.sendEmailVerification(in.Email, emailToken)
 	}()
 
 	go func() {
@@ -270,6 +285,7 @@ func (s *userService) ForgotPassword(
 	in domain.ForgotPasswordInput,
 ) (string, error) {
 	var rawToken string
+	var email string
 
 	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		var user domain.User
@@ -284,6 +300,7 @@ func (s *userService) ForgotPassword(
 			// Avoid user enumeration in forgot-password flows.
 			return nil
 		}
+		email = user.Email
 
 		if err := s.vtr.InvalidateByUserAndType(txCtx, user.ID, domain.PasswordReset); err != nil {
 			return err
@@ -305,6 +322,10 @@ func (s *userService) ForgotPassword(
 	})
 	if err != nil {
 		return "", err
+	}
+
+	if rawToken != "" && email != "" {
+		go s.sendPasswordResetEmail(email, rawToken)
 	}
 
 	return rawToken, nil
@@ -386,13 +407,30 @@ func (s *userService) ResendEmailVerification(
 	ctx context.Context,
 	userID uuid.UUID,
 ) error {
+	return s.resendEmailVerificationForUser(ctx, func(txCtx context.Context) (domain.User, error) {
+		return s.r.FindByID(txCtx, userID)
+	})
+}
 
-	var emailToken *domain.VerificationToken
+func (s *userService) ResendEmailVerificationByEmail(
+	ctx context.Context,
+	email string,
+) error {
+	return s.resendEmailVerificationForUser(ctx, func(txCtx context.Context) (domain.User, error) {
+		return s.r.FindByEmail(txCtx, email)
+	})
+}
+
+func (s *userService) resendEmailVerificationForUser(
+	ctx context.Context,
+	findUser func(txCtx context.Context) (domain.User, error),
+) error {
+	var rawToken string
 	var email string
 
 	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		// Fetch user
-		user, err := s.r.FindByID(txCtx, userID)
+		user, err := findUser(txCtx)
 		if err != nil {
 			return err
 		}
@@ -412,7 +450,7 @@ func (s *userService) ResendEmailVerification(
 		}
 
 		// Create new verification token
-		rawToken, err := s.generateRawToken()
+		generatedToken, err := s.generateRawToken()
 		if err != nil {
 			return err
 		}
@@ -421,7 +459,7 @@ func (s *userService) ResendEmailVerification(
 		token := &domain.VerificationToken{
 			UserID:    user.ID,
 			Type:      domain.VerificationEmail,
-			TokenHash: s.generateTokenHash(rawToken),
+			TokenHash: s.generateTokenHash(generatedToken),
 			ExpiresAt: time.Now().Add(24 * time.Hour),
 		}
 
@@ -431,7 +469,7 @@ func (s *userService) ResendEmailVerification(
 		}
 
 		// Assign to outer variables for sending email after transaction
-		emailToken = token
+		rawToken = generatedToken
 		email = user.Email
 		return nil
 	})
@@ -441,7 +479,7 @@ func (s *userService) ResendEmailVerification(
 	}
 
 	// Send verification email
-	go s.sendEmailVerification(email, *emailToken)
+	go s.sendEmailVerification(email, rawToken)
 	return nil
 }
 

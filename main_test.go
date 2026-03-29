@@ -16,6 +16,10 @@ func TestSetupServer_Success(t *testing.T) {
 	t.Setenv("SWAGGER_USER", "swagger")
 	t.Setenv("SWAGGER_PASSWORD", "swagger-pass")
 	t.Setenv("JWT_SECRET_V1", "jwt_secret")
+	t.Setenv("EMAIL_FROM", "noreply@booknest.test")
+	t.Setenv("SES_REGION", "ap-south-1")
+	t.Setenv("SES_ACCESS_KEY", "test-access-key")
+	t.Setenv("SES_SECRET_KEY", "test-secret-key")
 
 	originalConnectGORM := connectGORM
 	t.Cleanup(func() {
@@ -61,6 +65,10 @@ func TestSetupServer_VersionedRoutingAndSwaggerV1(t *testing.T) {
 	t.Setenv("SWAGGER_USER", "swagger")
 	t.Setenv("SWAGGER_PASSWORD", "swagger-pass")
 	t.Setenv("JWT_SECRET_V1", "jwt_secret")
+	t.Setenv("EMAIL_FROM", "noreply@booknest.test")
+	t.Setenv("SES_REGION", "ap-south-1")
+	t.Setenv("SES_ACCESS_KEY", "test-access-key")
+	t.Setenv("SES_SECRET_KEY", "test-secret-key")
 
 	originalConnectGORM := connectGORM
 	t.Cleanup(func() {

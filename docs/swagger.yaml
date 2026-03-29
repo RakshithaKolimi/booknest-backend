@@ -65,6 +65,8 @@ definitions:
         type: string
       available_stock:
         type: integer
+      average_rating:
+        type: number
       categories:
         items:
           $ref: '#/definitions/Category'
@@ -93,6 +95,8 @@ definitions:
         $ref: '#/definitions/Publisher'
       publisher_id:
         type: string
+      total_reviews:
+        type: integer
       updated_at:
         type: string
     type: object

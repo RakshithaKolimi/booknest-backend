@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,12 +12,16 @@ import (
 	"strings"
 	"time"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis"
 	"github.com/jackc/pgx/v5/pgxpool"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
+	"booknest/internal/domain"
 	"booknest/internal/http/api"
 	apiv1 "booknest/internal/http/api/v1"
 	"booknest/internal/http/controller"
@@ -28,6 +33,7 @@ import (
 	"booknest/internal/service/book_service"
 	"booknest/internal/service/cart_service"
 	"booknest/internal/service/category_service"
+	"booknest/internal/service/notification_service"
 	"booknest/internal/service/order_service"
 	"booknest/internal/service/publisher_service"
 	"booknest/internal/service/review_service"
@@ -97,6 +103,41 @@ func useCORSMiddleware(allowedOrigins map[string]bool) gin.HandlerFunc {
 	}
 }
 
+func initNotificationService(
+	ctx context.Context,
+	notificationRepo domain.NotificationRepository,
+) (domain.NotificationService, error) {
+	// Check SES config first; if not present, skip notification service setup
+	from := strings.TrimSpace(os.Getenv("SES_FROM_EMAIL"))
+	if from == "" {
+		slog.Info("SES_FROM_EMAIL not set, using EMAIL_FROM")
+		from = strings.TrimSpace(os.Getenv("EMAIL_FROM"))
+	}
+	region := strings.TrimSpace(os.Getenv("SES_REGION"))
+	accessKey := strings.TrimSpace(os.Getenv("SES_ACCESS_KEY"))
+	secretKey := strings.TrimSpace(os.Getenv("SES_SECRET_KEY"))
+
+	if from == "" || region == "" || accessKey == "" || secretKey == "" {
+		return nil, fmt.Errorf("email notifications are not configured: SES/EMAIL_FROM and SES credentials are required")
+	}
+
+	// Load AWS config for SES client
+	cfg, err := awsconfig.LoadDefaultConfig(
+		ctx,
+		awsconfig.WithRegion(region),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load email notification config: %w", err)
+	}
+
+	// Create SES email provider and notification service
+	emailProvider := notification_service.NewSESEmail(ses.NewFromConfig(cfg), from)
+	return notification_service.NewNotificationServiceWithRepository(emailProvider, notificationRepo), nil
+}
+
 func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	configureSwagger()
 
@@ -130,8 +171,16 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 
 	userRepo := repository.NewUserRepo(dbpool, gormdb)
 	vtRepo := repository.NewVerificationRepo(dbpool, gormdb)
+	notificationRepo := repository.NewNotificationRepo(dbpool)
 	txm := util.NewTransactionManager(dbpool)
-	userService := user_service.NewUserService(txm, userRepo, vtRepo)
+
+	// Initialise notification service with SES email provider
+	notificationService, err := initNotificationService(context.Background(), notificationRepo)
+	if err != nil {
+		return nil, err
+	}
+
+	userService := user_service.NewUserServiceWithNotification(txm, userRepo, vtRepo, notificationService)
 	userController := controller.NewUserController(userService)
 
 	bookRepo := repository.NewBookRepository(gormdb, sqlDB)
@@ -155,7 +204,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	cartController := controller.NewCartController(cartService)
 
 	orderRepo := repository.NewOrderRepo(dbpool)
-	orderService := order_service.NewOrderService(txm, orderRepo, cartRepo)
+	orderService := order_service.NewOrderServiceWithNotification(txm, orderRepo, cartRepo, userRepo, notificationService)
 	orderController := controller.NewOrderController(orderService)
 
 	reviewRepo := repository.NewReviewRepository(gormdb)

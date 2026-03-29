@@ -87,6 +87,7 @@ type UserService interface {
 	VerifyEmail(ctx context.Context, rawToken string) error
 	VerifyMobile(ctx context.Context, otp string) error
 	ResendEmailVerification(ctx context.Context, userID uuid.UUID) error
+	ResendEmailVerificationByEmail(ctx context.Context, email string) error
 	ResendMobileOTP(ctx context.Context, userID uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 }

@@ -18,6 +18,8 @@ func RegisterUserRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, rdb *redi
 		auth.POST(routes.RefreshRoute, controller.Refresh)
 		auth.POST(routes.ForgotPassword, controller.ForgotPassword)
 		auth.POST(routes.ResetPasswordByToken, controller.ResetPasswordWithToken)
+		auth.POST(routes.VerifyEmailRoute, controller.VerifyEmail)
+		auth.POST(routes.ResendEmailRoute, controller.ResendEmailVerification)
 	}
 
 	protected := r.Group("")
@@ -25,9 +27,7 @@ func RegisterUserRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, rdb *redi
 	{
 		protected.GET(routes.UserRoute, controller.GetUser)
 		protected.DELETE(routes.UserRoute, controller.DeleteUser)
-		protected.POST(routes.VerifyEmailRoute, controller.VerifyEmail)
 		protected.POST(routes.VerifyMobileRoute, controller.VerifyMobile)
-		protected.POST(routes.ResendEmailRoute, controller.ResendEmailVerification)
 		protected.POST(routes.ResendMobileOTPRoute, controller.ResendMobileOTP)
 		protected.POST(routes.ResetPasswordRoute, controller.ResetPassword)
 	}

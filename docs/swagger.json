@@ -2309,6 +2309,9 @@
                 "available_stock": {
                     "type": "integer"
                 },
+                "average_rating": {
+                    "type": "number"
+                },
                 "categories": {
                     "type": "array",
                     "items": {
@@ -2350,6 +2353,9 @@
                 },
                 "publisher_id": {
                     "type": "string"
+                },
+                "total_reviews": {
+                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "string"

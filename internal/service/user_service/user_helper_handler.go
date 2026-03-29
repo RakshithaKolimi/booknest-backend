@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -157,12 +159,58 @@ func (s *userService) verifyToken(
 	})
 }
 
-func (s *userService) sendEmailVerification(email string, token domain.VerificationToken) {
-	slog.Debug("Sending Email...", "email", email, "token:", token.TokenHash)
+func (s *userService) sendEmailVerification(email string, rawToken string) {
+	if s.notification == nil {
+		return
+	}
+	link := s.buildFrontendLink("/verify-email", map[string]string{
+		"token": rawToken,
+		"email": email,
+	})
+	if err := s.notification.SendVerificationEmail(email, link); err != nil {
+		slog.Error("failed to send verification email", "email", email, "error", err)
+	}
 }
 
 func (s *userService) sendMobileVerification(mobile, otp string) {
 	slog.Debug("Sending OTP...", "mobile:", mobile, "otp:", otp)
+}
+
+func (s *userService) sendPasswordResetEmail(email string, rawToken string) {
+	if s.notification == nil {
+		return
+	}
+	link := s.buildFrontendLink("/reset-password", map[string]string{
+		"token": rawToken,
+		"email": email,
+	})
+	if err := s.notification.SendPasswordReset(email, link); err != nil {
+		slog.Error("failed to send password reset email", "email", email, "error", err)
+	}
+}
+
+func (s *userService) buildFrontendLink(path string, params map[string]string) string {
+	base := strings.TrimSpace(os.Getenv("BOOKNEST_WEB_URL"))
+	if base == "" {
+		base = strings.TrimSpace(os.Getenv("FRONTEND_URL"))
+	}
+	if base == "" {
+		base = "http://localhost:3000"
+	}
+
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return base
+	}
+
+	parsed.Path = strings.TrimRight(parsed.Path, "/") + path
+	query := parsed.Query()
+	for key, value := range params {
+		query.Set(key, value)
+	}
+	parsed.RawQuery = query.Encode()
+
+	return parsed.String()
 }
 
 func (s userService) generateRefreshToken(user domain.User) (string, error) {

@@ -13,9 +13,11 @@ import (
 )
 
 type orderService struct {
-	txm       domain.TransactionManager
-	orderRepo domain.OrderRepository
-	cartRepo  domain.CartRepository
+	txm          domain.TransactionManager
+	orderRepo    domain.OrderRepository
+	cartRepo     domain.CartRepository
+	userRepo     domain.UserRepository
+	notification domain.NotificationService
 }
 
 func NewOrderService(
@@ -27,6 +29,22 @@ func NewOrderService(
 		txm:       txm,
 		orderRepo: orderRepo,
 		cartRepo:  cartRepo,
+	}
+}
+
+func NewOrderServiceWithNotification(
+	txm domain.TransactionManager,
+	orderRepo domain.OrderRepository,
+	cartRepo domain.CartRepository,
+	userRepo domain.UserRepository,
+	notification domain.NotificationService,
+) domain.OrderService {
+	return &orderService{
+		txm:          txm,
+		orderRepo:    orderRepo,
+		cartRepo:     cartRepo,
+		userRepo:     userRepo,
+		notification: notification,
 	}
 }
 
@@ -114,6 +132,8 @@ func (s *orderService) ConfirmPayment(
 	input domain.PaymentConfirmInput,
 ) (domain.OrderView, error) {
 	var orderView domain.OrderView
+	var receiptUserID uuid.UUID
+	var receiptOrderID string
 
 	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		order, err := s.orderRepo.GetOrderByID(txCtx, input.OrderID)
@@ -161,6 +181,9 @@ func (s *orderService) ConfirmPayment(
 			if err := s.cartRepo.ClearCart(txCtx, cart.ID); err != nil {
 				return err
 			}
+
+			receiptUserID = order.UserID
+			receiptOrderID = order.OrderNumber
 		} else {
 			if err := s.orderRepo.UpdateOrderPayment(txCtx, order.ID, domain.PaymentFailed, paymentMethod); err != nil {
 				return err
@@ -174,7 +197,26 @@ func (s *orderService) ConfirmPayment(
 		return err
 	})
 
+	if err == nil && input.Success {
+		go s.sendOrderReceipt(ctx, receiptUserID, receiptOrderID)
+	}
+
 	return orderView, err
+}
+
+func (s *orderService) sendOrderReceipt(ctx context.Context, userID uuid.UUID, orderID string) {
+	if s.userRepo == nil || s.notification == nil || orderID == "" {
+		return
+	}
+
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return
+	}
+
+	if err := s.notification.SendOrderReceipt(user.Email, orderID); err != nil {
+		return
+	}
 }
 
 func (s *orderService) CancelOrder(

@@ -17,19 +17,20 @@ import (
 
 // MockUserService is a mock implementation of domain.UserService
 type MockUserService struct {
-	FindUserFunc                func(ctx context.Context, id uuid.UUID) (domain.User, error)
-	RegisterFunc                func(ctx context.Context, in domain.UserInput) error
-	RegisterAdminFunc           func(ctx context.Context, in domain.AdminRegistrationInput) error
-	LoginFunc                   func(ctx context.Context, in domain.LoginInput) (domain.AuthTokens, error)
-	RefreshFunc                 func(ctx context.Context, rawRefreshToken string) (string, error)
-	ForgotPasswordFunc          func(ctx context.Context, in domain.ForgotPasswordInput) (string, error)
-	ResetPasswordFunc           func(ctx context.Context, userID uuid.UUID, newPassword string) error
-	ResetPasswordWithTokenFunc  func(ctx context.Context, rawToken, newPassword string) error
-	VerifyEmailFunc             func(ctx context.Context, rawToken string) error
-	VerifyMobileFunc            func(ctx context.Context, otp string) error
-	ResendEmailVerificationFunc func(ctx context.Context, userID uuid.UUID) error
-	ResendMobileOTPFunc         func(ctx context.Context, userID uuid.UUID) error
-	DeleteUserFunc              func(ctx context.Context, id uuid.UUID) error
+	FindUserFunc                       func(ctx context.Context, id uuid.UUID) (domain.User, error)
+	RegisterFunc                       func(ctx context.Context, in domain.UserInput) error
+	RegisterAdminFunc                  func(ctx context.Context, in domain.AdminRegistrationInput) error
+	LoginFunc                          func(ctx context.Context, in domain.LoginInput) (domain.AuthTokens, error)
+	RefreshFunc                        func(ctx context.Context, rawRefreshToken string) (string, error)
+	ForgotPasswordFunc                 func(ctx context.Context, in domain.ForgotPasswordInput) (string, error)
+	ResetPasswordFunc                  func(ctx context.Context, userID uuid.UUID, newPassword string) error
+	ResetPasswordWithTokenFunc         func(ctx context.Context, rawToken, newPassword string) error
+	VerifyEmailFunc                    func(ctx context.Context, rawToken string) error
+	VerifyMobileFunc                   func(ctx context.Context, otp string) error
+	ResendEmailVerificationFunc        func(ctx context.Context, userID uuid.UUID) error
+	ResendEmailVerificationByEmailFunc func(ctx context.Context, email string) error
+	ResendMobileOTPFunc                func(ctx context.Context, userID uuid.UUID) error
+	DeleteUserFunc                     func(ctx context.Context, id uuid.UUID) error
 }
 
 // Implement domain.UserService methods for MockUserService
@@ -106,6 +107,13 @@ func (m *MockUserService) VerifyMobile(ctx context.Context, otp string) error {
 func (m *MockUserService) ResendEmailVerification(ctx context.Context, userID uuid.UUID) error {
 	if m.ResendEmailVerificationFunc != nil {
 		return m.ResendEmailVerificationFunc(ctx, userID)
+	}
+	return errors.New("not implemented")
+}
+
+func (m *MockUserService) ResendEmailVerificationByEmail(ctx context.Context, email string) error {
+	if m.ResendEmailVerificationByEmailFunc != nil {
+		return m.ResendEmailVerificationByEmailFunc(ctx, email)
 	}
 	return errors.New("not implemented")
 }
@@ -837,7 +845,7 @@ func TestUserControllerHandlerErrorsDirect(t *testing.T) {
 	}{
 		{name: "verify email error", method: ctl.VerifyEmail, body: `{"token":"bad"}`, code: http.StatusBadRequest},
 		{name: "verify mobile error", method: ctl.VerifyMobile, body: `{"otp":"bad"}`, code: http.StatusBadRequest},
-		{name: "resend email unauthorized", method: ctl.ResendEmailVerification, code: http.StatusUnauthorized},
+		{name: "resend email missing email", method: ctl.ResendEmailVerification, code: http.StatusBadRequest},
 		{name: "resend mobile unauthorized", method: ctl.ResendMobileOTP, code: http.StatusUnauthorized},
 		{name: "resend email server error", method: ctl.ResendEmailVerification, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},
 		{name: "resend mobile server error", method: ctl.ResendMobileOTP, setup: func(c *gin.Context) { c.Set("user_id", userID.String()) }, code: http.StatusInternalServerError},

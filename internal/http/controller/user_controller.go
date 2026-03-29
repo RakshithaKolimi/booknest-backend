@@ -402,13 +402,34 @@ func (c *userController) VerifyMobile(ctx *gin.Context) {
 // @Security     BearerAuth
 // @Router       /auth/resend-email-verification [post]
 func (c *userController) ResendEmailVerification(ctx *gin.Context) {
-	userIDFromCtx, err := getUserID(ctx)
+	var input struct {
+		Email string `json:"email"`
+	}
+
+	err := ctx.ShouldBindJSON(&input)
 	if err != nil {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = sanitizeInput(&input)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := c.service.ResendEmailVerification(ctx, userIDFromCtx); err != nil {
+	// If email is provided, use it to resend verification; otherwise, get user ID from context
+	if input.Email != "" {
+		err = c.service.ResendEmailVerificationByEmail(ctx, input.Email)
+	} else {
+		userIDFromCtx, userErr := getUserID(ctx)
+		if userErr != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "email is required"})
+			return
+		}
+		err = c.service.ResendEmailVerification(ctx, userIDFromCtx)
+	}
+
+	if err != nil {
 		if errors.Is(err, errors.New("email already verified")) {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "email already verified"})
 		} else {

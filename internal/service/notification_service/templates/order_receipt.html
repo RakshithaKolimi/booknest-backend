@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body style="margin:0;padding:0;background:#f5f0e8;font-family:Georgia,'Times New Roman',serif;color:#2f241f;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f0e8;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#fffdfa;border:1px solid #e7ddcf;border-radius:20px;overflow:hidden;">
+            <tr>
+              <td style="padding:32px 40px;background:linear-gradient(135deg,#224037 0%,#4b7b5d 100%);color:#f3fff8;">
+                <p style="margin:0 0 10px;font-size:12px;letter-spacing:0.24em;text-transform:uppercase;opacity:0.8;">BookNest Orders</p>
+                <h1 style="margin:0;font-size:30px;line-height:1.2;font-weight:700;">Your receipt is ready</h1>
+                <p style="margin:14px 0 0;font-size:15px;line-height:1.7;color:#def5e8;">
+                  Thanks for shopping with BookNest. Your order has been recorded successfully.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:36px 40px 18px;">
+                <p style="margin:0 0 18px;font-size:16px;line-height:1.8;color:#4a3a32;">
+                  We are preparing your books for the next step. Keep the order ID below handy if you need support.
+                </p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0;border-collapse:separate;border-spacing:0;">
+                  <tr>
+                    <td style="padding:18px 20px;border-radius:16px;background:#eef7f1;border:1px solid #cfe2d6;">
+                      <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:#557867;">Order ID</p>
+                      <p style="margin:0;font-size:22px;font-weight:700;color:#24463a;">{{ .OrderID }}</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 40px 34px;">
+                <p style="margin:0;font-size:13px;line-height:1.7;color:#8c7a70;">
+                  Need help with this order? Contact BookNest support and include your order ID for faster assistance.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -60,6 +60,12 @@ REDIS_DB=0
 
 # Optional: overrides the host shown in Swagger docs
 API_HOST=localhost:8080
+
+# Email SES Secrets
+SES_ACCESS_KEY=
+SES_SECRET_KEY=
+SES_REGION=ap-south-1
+EMAIL_FROM=
 ```
 
 Notes:
