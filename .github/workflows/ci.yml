@@ -39,7 +39,7 @@ jobs:
           files: coverage.out
 
       - name: Coverage summary
-        run: go tool cover -func=coverage.out | grep total
+        run: go tool cover -func=coverage.out | tail -n 1
   docker:
     needs: test
     runs-on: ubuntu-latest
