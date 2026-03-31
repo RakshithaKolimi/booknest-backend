@@ -118,6 +118,65 @@ func (m *MockVerificationTokenRepository) Delete(ctx context.Context, id uuid.UU
 	return nil
 }
 
+type MockNotificationService struct {
+	SendOTPFunc               func(phone string, otp string) error
+	SendLoginAlertFunc        func(phone string, device string, location string) error
+	SendOrderConfirmationFunc func(phone string, orderID string) error
+	SendOrderCancellationFunc func(phone string, orderID string, reason string) error
+	SendVerificationEmailFunc func(email string, link string) error
+	SendPasswordResetFunc     func(email string, link string) error
+	SendOrderReceiptFunc      func(email string, orderID string) error
+}
+
+func (m *MockNotificationService) SendOTP(phone string, otp string) error {
+	if m.SendOTPFunc != nil {
+		return m.SendOTPFunc(phone, otp)
+	}
+	return nil
+}
+
+func (m *MockNotificationService) SendLoginAlert(phone string, device string, location string) error {
+	if m.SendLoginAlertFunc != nil {
+		return m.SendLoginAlertFunc(phone, device, location)
+	}
+	return nil
+}
+
+func (m *MockNotificationService) SendOrderConfirmation(phone string, orderID string) error {
+	if m.SendOrderConfirmationFunc != nil {
+		return m.SendOrderConfirmationFunc(phone, orderID)
+	}
+	return nil
+}
+
+func (m *MockNotificationService) SendOrderCancellation(phone string, orderID string, reason string) error {
+	if m.SendOrderCancellationFunc != nil {
+		return m.SendOrderCancellationFunc(phone, orderID, reason)
+	}
+	return nil
+}
+
+func (m *MockNotificationService) SendVerificationEmail(email string, link string) error {
+	if m.SendVerificationEmailFunc != nil {
+		return m.SendVerificationEmailFunc(email, link)
+	}
+	return nil
+}
+
+func (m *MockNotificationService) SendPasswordReset(email string, link string) error {
+	if m.SendPasswordResetFunc != nil {
+		return m.SendPasswordResetFunc(email, link)
+	}
+	return nil
+}
+
+func (m *MockNotificationService) SendOrderReceipt(email string, orderID string) error {
+	if m.SendOrderReceiptFunc != nil {
+		return m.SendOrderReceiptFunc(email, orderID)
+	}
+	return nil
+}
+
 // TestHashPassword_Success tests successful password hashing
 func TestHashPassword_Success(t *testing.T) {
 	service := &userService{}
@@ -242,6 +301,48 @@ func TestGenerateOTP_InvalidLength(t *testing.T) {
 
 	if otp != "" {
 		t.Fatalf("expected empty OTP for length 0, got %s", otp)
+	}
+}
+
+func TestSendMobileVerification_UsesNotificationService(t *testing.T) {
+	called := false
+	service := &userService{
+		notification: &MockNotificationService{
+			SendOTPFunc: func(phone string, otp string) error {
+				called = true
+				if phone != "+15555550123" || otp != "482901" {
+					t.Fatalf("unexpected otp payload: %s %s", phone, otp)
+				}
+				return nil
+			},
+		},
+	}
+
+	service.sendMobileVerification("+15555550123", "482901")
+
+	if !called {
+		t.Fatalf("expected SendOTP to be called")
+	}
+}
+
+func TestSendLoginAlert_UsesNotificationService(t *testing.T) {
+	called := false
+	service := &userService{
+		notification: &MockNotificationService{
+			SendLoginAlertFunc: func(phone string, device string, location string) error {
+				called = true
+				if phone != "+15555550123" || device != "Unknown device" || location != "Unknown location" {
+					t.Fatalf("unexpected login alert payload: %s %s %s", phone, device, location)
+				}
+				return nil
+			},
+		},
+	}
+
+	service.sendLoginAlert("+15555550123")
+
+	if !called {
+		t.Fatalf("expected SendLoginAlert to be called")
 	}
 }
 

@@ -368,7 +368,9 @@ func (c *userController) VerifyEmail(ctx *gin.Context) {
 // @Router       /auth/verify-mobile [post]
 func (c *userController) VerifyMobile(ctx *gin.Context) {
 	var input struct {
-		OTP string `json:"otp" binding:"required"`
+		OTP       string `json:"otp"`
+		LegacyOTP string `json:"OTP"`
+		Code      string `json:"code"`
 	}
 
 	if err := ctx.ShouldBindJSON(&input); err != nil {
@@ -380,7 +382,19 @@ func (c *userController) VerifyMobile(ctx *gin.Context) {
 		return
 	}
 
-	if err := c.service.VerifyMobile(ctx, input.OTP); err != nil {
+	otp := input.OTP
+	if otp == "" {
+		otp = input.LegacyOTP
+	}
+	if otp == "" {
+		otp = input.Code
+	}
+	if otp == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "otp is required"})
+		return
+	}
+
+	if err := c.service.VerifyMobile(ctx, otp); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired OTP"})
 		return
 	}

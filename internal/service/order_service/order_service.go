@@ -198,13 +198,13 @@ func (s *orderService) ConfirmPayment(
 	})
 
 	if err == nil && input.Success {
-		go s.sendOrderReceipt(ctx, receiptUserID, receiptOrderID)
+		go s.sendOrderNotifications(ctx, receiptUserID, receiptOrderID)
 	}
 
 	return orderView, err
 }
 
-func (s *orderService) sendOrderReceipt(ctx context.Context, userID uuid.UUID, orderID string) {
+func (s *orderService) sendOrderNotifications(ctx context.Context, userID uuid.UUID, orderID string) {
 	if s.userRepo == nil || s.notification == nil || orderID == "" {
 		return
 	}
@@ -217,6 +217,38 @@ func (s *orderService) sendOrderReceipt(ctx context.Context, userID uuid.UUID, o
 	if err := s.notification.SendOrderReceipt(user.Email, orderID); err != nil {
 		return
 	}
+
+	if strings.TrimSpace(user.Mobile) == "" {
+		return
+	}
+
+	if err := s.notification.SendOrderConfirmation(user.Mobile, orderID); err != nil {
+		return
+	}
+}
+
+func (s *orderService) sendOrderCancellationNotification(
+	ctx context.Context,
+	userID uuid.UUID,
+	orderID string,
+	reason string,
+) {
+	if s.userRepo == nil || s.notification == nil || orderID == "" || reason == "" {
+		return
+	}
+
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return
+	}
+
+	if strings.TrimSpace(user.Mobile) == "" {
+		return
+	}
+
+	if err := s.notification.SendOrderCancellation(user.Mobile, orderID, reason); err != nil {
+		return
+	}
 }
 
 func (s *orderService) CancelOrder(
@@ -225,6 +257,9 @@ func (s *orderService) CancelOrder(
 	input domain.OrderCancelInput,
 ) (domain.OrderView, error) {
 	var orderView domain.OrderView
+	var cancelledUserID uuid.UUID
+	var cancelledOrderID string
+	var cancellationReason string
 
 	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		order, err := s.orderRepo.GetOrderByID(txCtx, input.OrderID)
@@ -251,9 +286,17 @@ func (s *orderService) CancelOrder(
 			return err
 		}
 
+		cancelledUserID = order.UserID
+		cancelledOrderID = order.OrderNumber
+		cancellationReason = reason
+
 		orderView, err = s.getOrderView(txCtx, order.ID)
 		return err
 	})
+
+	if err == nil {
+		go s.sendOrderCancellationNotification(ctx, cancelledUserID, cancelledOrderID, cancellationReason)
+	}
 
 	return orderView, err
 }
@@ -263,6 +306,9 @@ func (s *orderService) AdminUpdateOrderStatus(
 	input domain.AdminOrderStatusUpdateInput,
 ) (domain.OrderView, error) {
 	var orderView domain.OrderView
+	var cancelledUserID uuid.UUID
+	var cancelledOrderID string
+	var cancellationReason string
 
 	err := s.txm.InTransaction(ctx, func(txCtx context.Context) error {
 		order, err := s.orderRepo.GetOrderByID(txCtx, input.OrderID)
@@ -290,6 +336,12 @@ func (s *orderService) AdminUpdateOrderStatus(
 			if err := s.orderRepo.UpdateOrderStatus(txCtx, order.ID, input.Status, reasonPtr); err != nil {
 				return err
 			}
+
+			if input.Status == domain.OrderCancelled {
+				cancelledUserID = order.UserID
+				cancelledOrderID = order.OrderNumber
+				cancellationReason = reason
+			}
 		}
 
 		if input.PaymentStatus != nil {
@@ -302,6 +354,10 @@ func (s *orderService) AdminUpdateOrderStatus(
 		orderView, err = s.getOrderView(txCtx, order.ID)
 		return err
 	})
+
+	if err == nil && cancelledOrderID != "" {
+		go s.sendOrderCancellationNotification(ctx, cancelledUserID, cancelledOrderID, cancellationReason)
+	}
 
 	return orderView, err
 }

@@ -545,6 +545,62 @@ func TestVerifyMobile_Success(t *testing.T) {
 	}
 }
 
+func TestVerifyMobileDirect_AcceptsUppercaseOTP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	called := false
+	ctl := NewUserController(&MockUserService{
+		VerifyMobileFunc: func(ctx context.Context, otp string) error {
+			called = true
+			if otp != "123456" {
+				t.Fatalf("unexpected otp: %q", otp)
+			}
+			return nil
+		},
+	}).(*userController)
+
+	body := bytes.NewBufferString(`{"OTP":"123456"}`)
+	req := httptest.NewRequest(http.MethodPost, "/verify-mobile", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = req
+
+	ctl.VerifyMobile(ctx)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d with body %s", w.Code, w.Body.String())
+	}
+	if !called {
+		t.Fatalf("expected VerifyMobile service to be called")
+	}
+}
+
+func TestVerifyMobileDirect_RequiresOTP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctl := NewUserController(&MockUserService{
+		VerifyMobileFunc: func(ctx context.Context, otp string) error {
+			t.Fatal("service should not be called when otp is missing")
+			return nil
+		},
+	}).(*userController)
+
+	body := bytes.NewBufferString(`{}`)
+	req := httptest.NewRequest(http.MethodPost, "/verify-mobile", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	ctx.Request = req
+
+	ctl.VerifyMobile(ctx)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if got := w.Body.String(); !bytes.Contains([]byte(got), []byte("otp is required")) {
+		t.Fatalf("expected otp validation message, got %s", got)
+	}
+}
+
 func TestUserControllerRegisterDirect(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	called := false

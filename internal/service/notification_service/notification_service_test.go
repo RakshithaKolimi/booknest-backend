@@ -20,6 +20,17 @@ func (m *mockEmailProvider) SendEmail(to string, subject string, body string) (d
 	return domain.EmailSendResult{}, nil
 }
 
+type mockSMSProvider struct {
+	sendSMSFunc func(to string, message string) error
+}
+
+func (m *mockSMSProvider) SendSMS(to string, message string) error {
+	if m.sendSMSFunc != nil {
+		return m.sendSMSFunc(to, message)
+	}
+	return nil
+}
+
 func TestSendVerificationEmail(t *testing.T) {
 	saved := &domain.Notification{}
 	provider := &mockEmailProvider{
@@ -133,6 +144,103 @@ func TestSendOrderReceipt_ReturnsErrorWhenProviderMissing(t *testing.T) {
 	err := svc.SendOrderReceipt("user@example.com", "ORDER-123")
 	if err == nil || !strings.Contains(err.Error(), "email provider is not configured") {
 		t.Fatalf("expected missing provider error, got %v", err)
+	}
+}
+
+func TestSendOTP(t *testing.T) {
+	saved := &domain.Notification{}
+	provider := &mockSMSProvider{
+		sendSMSFunc: func(to string, message string) error {
+			if to != "+919999999999" {
+				t.Fatalf("unexpected recipient: %q", to)
+			}
+			if !strings.Contains(message, "482901") {
+				t.Fatalf("expected otp in message, got %q", message)
+			}
+			return nil
+		},
+	}
+	repo := &recordingNotificationRepository{createFunc: func(notification *domain.Notification) error {
+		*saved = *notification
+		return nil
+	}}
+
+	svc := NewNotificationServiceWithProvidersAndRepository(nil, provider, repo)
+	if err := svc.SendOTP("+919999999999", "482901"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if saved.Channel != domain.NotificationChannelSMS || saved.Type != domain.NotificationTypeOTP {
+		t.Fatalf("unexpected saved notification: %+v", saved)
+	}
+	if saved.Status != domain.NotificationStatusSent {
+		t.Fatalf("expected sent notification, got %+v", saved)
+	}
+}
+
+func TestSendLoginAlert_RecordsFailure(t *testing.T) {
+	saved := &domain.Notification{}
+	provider := &mockSMSProvider{
+		sendSMSFunc: func(to string, message string) error {
+			if !strings.Contains(message, "Pixel 8") || !strings.Contains(message, "Bengaluru") {
+				t.Fatalf("expected device and location in message, got %q", message)
+			}
+			return errors.New("sns publish failed")
+		},
+	}
+	repo := &recordingNotificationRepository{createFunc: func(notification *domain.Notification) error {
+		*saved = *notification
+		return nil
+	}}
+
+	svc := NewNotificationServiceWithProvidersAndRepository(nil, provider, repo)
+	err := svc.SendLoginAlert("+919999999999", "Pixel 8", "Bengaluru")
+	if err == nil || err.Error() != "sns publish failed" {
+		t.Fatalf("expected send failure, got %v", err)
+	}
+	if saved.Status != domain.NotificationStatusFailed {
+		t.Fatalf("expected failed notification status, got %+v", saved)
+	}
+	if saved.ErrorMessage == nil || *saved.ErrorMessage != "sns publish failed" {
+		t.Fatalf("expected error message to be captured, got %+v", saved)
+	}
+}
+
+func TestSendOrderCancellation(t *testing.T) {
+	saved := &domain.Notification{}
+	provider := &mockSMSProvider{
+		sendSMSFunc: func(to string, message string) error {
+			if to != "+919999999999" {
+				t.Fatalf("unexpected recipient: %q", to)
+			}
+			if !strings.Contains(message, "ORDER-123") || !strings.Contains(message, "Out of stock") {
+				t.Fatalf("expected order id and reason in message, got %q", message)
+			}
+			return nil
+		},
+	}
+	repo := &recordingNotificationRepository{createFunc: func(notification *domain.Notification) error {
+		*saved = *notification
+		return nil
+	}}
+
+	svc := NewNotificationServiceWithProvidersAndRepository(nil, provider, repo)
+	if err := svc.SendOrderCancellation("+919999999999", "ORDER-123", "Out of stock"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if saved.Channel != domain.NotificationChannelSMS || saved.Type != domain.NotificationTypeOrderCancellation {
+		t.Fatalf("unexpected saved notification: %+v", saved)
+	}
+	if saved.Status != domain.NotificationStatusSent {
+		t.Fatalf("expected sent notification, got %+v", saved)
+	}
+}
+
+func TestSendOrderConfirmation_ReturnsErrorWhenProviderMissing(t *testing.T) {
+	svc := NewNotificationServiceWithProviders(nil, nil)
+
+	err := svc.SendOrderConfirmation("+919999999999", "ORDER-123")
+	if err == nil || !strings.Contains(err.Error(), "sms provider is not configured") {
+		t.Fatalf("expected missing sms provider error, got %v", err)
 	}
 }
 

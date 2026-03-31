@@ -173,7 +173,21 @@ func (s *userService) sendEmailVerification(email string, rawToken string) {
 }
 
 func (s *userService) sendMobileVerification(mobile, otp string) {
-	slog.Debug("Sending OTP...", "mobile:", mobile, "otp:", otp)
+	if s.notification == nil {
+		return
+	}
+	if err := s.notification.SendOTP(mobile, otp); err != nil {
+		slog.Error("failed to send mobile verification otp", "mobile", mobile, "error", err)
+	}
+}
+
+func (s *userService) sendLoginAlert(mobile string) {
+	if s.notification == nil || strings.TrimSpace(mobile) == "" {
+		return
+	}
+	if err := s.notification.SendLoginAlert(mobile, "Unknown device", "Unknown location"); err != nil {
+		slog.Error("failed to send login alert", "mobile", mobile, "error", err)
+	}
 }
 
 func (s *userService) sendPasswordResetEmail(email string, rawToken string) {

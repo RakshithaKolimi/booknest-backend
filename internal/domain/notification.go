@@ -12,15 +12,22 @@ type NotificationStatus string
 
 const (
 	NotificationChannelEmail NotificationChannel = "EMAIL"
+	NotificationChannelSMS   NotificationChannel = "SMS"
 
 	NotificationTypeVerificationEmail NotificationType = "VERIFICATION_EMAIL"
 	NotificationTypePasswordReset     NotificationType = "PASSWORD_RESET"
 	NotificationTypeOrderReceipt      NotificationType = "ORDER_RECEIPT"
+	NotificationTypeOTP               NotificationType = "OTP"
+	NotificationTypeLoginAlert        NotificationType = "LOGIN_ALERT"
+	NotificationTypeOrderConfirmation NotificationType = "ORDER_CONFIRMATION"
+	NotificationTypeOrderCancellation NotificationType = "ORDER_CANCELLATION"
 
 	NotificationStatusSent   NotificationStatus = "SENT"
 	NotificationStatusFailed NotificationStatus = "FAILED"
 
 	EmailNotificationProviderSES = "SES"
+
+	SMSNotificationProviderSNS = "SNS"
 )
 
 type EmailSendResult struct {
@@ -58,6 +65,11 @@ type EmailProvider interface {
 }
 
 type NotificationService interface {
+	SendOTP(phone string, otp string) error
+	SendLoginAlert(phone string, device string, location string) error
+	SendOrderConfirmation(phone string, orderID string) error
+	SendOrderCancellation(phone string, orderID string, reason string) error
+
 	SendVerificationEmail(email string, link string) error
 	SendPasswordReset(email string, link string) error
 	SendOrderReceipt(email string, orderID string) error

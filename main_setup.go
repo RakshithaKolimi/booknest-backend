@@ -15,6 +15,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -107,35 +108,63 @@ func initNotificationService(
 	ctx context.Context,
 	notificationRepo domain.NotificationRepository,
 ) (domain.NotificationService, error) {
-	// Check SES config first; if not present, skip notification service setup
 	from := strings.TrimSpace(os.Getenv("SES_FROM_EMAIL"))
 	if from == "" {
 		slog.Info("SES_FROM_EMAIL not set, using EMAIL_FROM")
 		from = strings.TrimSpace(os.Getenv("EMAIL_FROM"))
 	}
-	region := strings.TrimSpace(os.Getenv("SES_REGION"))
-	accessKey := strings.TrimSpace(os.Getenv("SES_ACCESS_KEY"))
-	secretKey := strings.TrimSpace(os.Getenv("SES_SECRET_KEY"))
 
-	if from == "" || region == "" || accessKey == "" || secretKey == "" {
-		return nil, fmt.Errorf("email notifications are not configured: SES/EMAIL_FROM and SES credentials are required")
+	sesRegion := strings.TrimSpace(os.Getenv("SES_REGION"))
+	sesAccessKey := strings.TrimSpace(os.Getenv("SES_ACCESS_KEY"))
+	sesSecretKey := strings.TrimSpace(os.Getenv("SES_SECRET_KEY"))
+
+	awsAccessKey := strings.TrimSpace(os.Getenv("AWS_ACCESS_KEY_ID"))
+	awsSecretKey := strings.TrimSpace(os.Getenv("AWS_SECRET_ACCESS_KEY"))
+	awsRegion := strings.TrimSpace(os.Getenv("AWS_REGION"))
+
+	var emailProvider domain.EmailProvider
+	if from != "" && sesRegion != "" && sesAccessKey != "" && sesSecretKey != "" {
+		cfg, err := awsconfig.LoadDefaultConfig(
+			ctx,
+			awsconfig.WithRegion(sesRegion),
+			awsconfig.WithCredentialsProvider(
+				credentials.NewStaticCredentialsProvider(sesAccessKey, sesSecretKey, ""),
+			),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("load email notification config: %w", err)
+		}
+		emailProvider = notification_service.NewSESEmail(ses.NewFromConfig(cfg), from)
+	} else {
+		slog.Warn("SES email notifications are not fully configured")
 	}
 
-	// Load AWS config for SES client
-	cfg, err := awsconfig.LoadDefaultConfig(
-		ctx,
-		awsconfig.WithRegion(region),
-		awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
-		),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("load email notification config: %w", err)
+	var smsProvider domain.SMSProvider
+	if awsRegion != "" && awsAccessKey != "" && awsSecretKey != "" {
+		cfg, err := awsconfig.LoadDefaultConfig(
+			ctx,
+			awsconfig.WithRegion(awsRegion),
+			awsconfig.WithCredentialsProvider(
+				credentials.NewStaticCredentialsProvider(awsAccessKey, awsSecretKey, ""),
+			),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("load sms notification config: %w", err)
+		}
+		smsProvider = notification_service.NewSNSSMS(sns.NewFromConfig(cfg))
+	} else {
+		slog.Warn("SNS SMS notifications are not fully configured")
 	}
 
-	// Create SES email provider and notification service
-	emailProvider := notification_service.NewSESEmail(ses.NewFromConfig(cfg), from)
-	return notification_service.NewNotificationServiceWithRepository(emailProvider, notificationRepo), nil
+	if emailProvider == nil && smsProvider == nil {
+		return nil, fmt.Errorf("notifications are not configured: provide SES and/or SNS credentials")
+	}
+
+	return notification_service.NewNotificationServiceWithProvidersAndRepository(
+		emailProvider,
+		smsProvider,
+		notificationRepo,
+	), nil
 }
 
 func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {

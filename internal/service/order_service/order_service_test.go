@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -137,6 +138,79 @@ func (m *mockCartRepository) RemoveCartItem(ctx context.Context, cartID uuid.UUI
 func (m *mockCartRepository) ClearCart(ctx context.Context, cartID uuid.UUID) error {
 	if m.clearCartFunc != nil {
 		return m.clearCartFunc(ctx, cartID)
+	}
+	return nil
+}
+
+type mockUserRepository struct {
+	findByIDFunc func(ctx context.Context, id uuid.UUID) (domain.User, error)
+}
+
+func (m *mockUserRepository) Create(ctx context.Context, user *domain.User) error { return nil }
+func (m *mockUserRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.User, error) {
+	if m.findByIDFunc != nil {
+		return m.findByIDFunc(ctx, id)
+	}
+	return domain.User{}, errors.New("not implemented")
+}
+func (m *mockUserRepository) FindByEmail(ctx context.Context, email string) (domain.User, error) {
+	return domain.User{}, errors.New("not implemented")
+}
+func (m *mockUserRepository) FindByMobile(ctx context.Context, mobile string) (domain.User, error) {
+	return domain.User{}, errors.New("not implemented")
+}
+func (m *mockUserRepository) Update(ctx context.Context, user *domain.User) error { return nil }
+func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error      { return nil }
+
+type mockNotificationService struct {
+	sendOTPFunc               func(phone string, otp string) error
+	sendLoginAlertFunc        func(phone string, device string, location string) error
+	sendOrderConfirmationFunc func(phone string, orderID string) error
+	sendOrderCancellationFunc func(phone string, orderID string, reason string) error
+	sendVerificationEmailFunc func(email string, link string) error
+	sendPasswordResetFunc     func(email string, link string) error
+	sendOrderReceiptFunc      func(email string, orderID string) error
+}
+
+func (m *mockNotificationService) SendOTP(phone string, otp string) error {
+	if m.sendOTPFunc != nil {
+		return m.sendOTPFunc(phone, otp)
+	}
+	return nil
+}
+func (m *mockNotificationService) SendLoginAlert(phone string, device string, location string) error {
+	if m.sendLoginAlertFunc != nil {
+		return m.sendLoginAlertFunc(phone, device, location)
+	}
+	return nil
+}
+func (m *mockNotificationService) SendOrderConfirmation(phone string, orderID string) error {
+	if m.sendOrderConfirmationFunc != nil {
+		return m.sendOrderConfirmationFunc(phone, orderID)
+	}
+	return nil
+}
+func (m *mockNotificationService) SendOrderCancellation(phone string, orderID string, reason string) error {
+	if m.sendOrderCancellationFunc != nil {
+		return m.sendOrderCancellationFunc(phone, orderID, reason)
+	}
+	return nil
+}
+func (m *mockNotificationService) SendVerificationEmail(email string, link string) error {
+	if m.sendVerificationEmailFunc != nil {
+		return m.sendVerificationEmailFunc(email, link)
+	}
+	return nil
+}
+func (m *mockNotificationService) SendPasswordReset(email string, link string) error {
+	if m.sendPasswordResetFunc != nil {
+		return m.sendPasswordResetFunc(email, link)
+	}
+	return nil
+}
+func (m *mockNotificationService) SendOrderReceipt(email string, orderID string) error {
+	if m.sendOrderReceiptFunc != nil {
+		return m.sendOrderReceiptFunc(email, orderID)
 	}
 	return nil
 }
@@ -453,6 +527,49 @@ func TestConfirmPayment_FailurePathFailsOrder(t *testing.T) {
 	}
 }
 
+func TestSendOrderNotifications_SendsEmailAndSMS(t *testing.T) {
+	userID := uuid.New()
+	emailCalled := false
+	smsCalled := false
+
+	svc := &orderService{
+		userRepo: &mockUserRepository{
+			findByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+				if id != userID {
+					t.Fatalf("unexpected user id: %s", id)
+				}
+				return domain.User{
+					ID:     userID,
+					Email:  "user@example.com",
+					Mobile: "+15555550123",
+				}, nil
+			},
+		},
+		notification: &mockNotificationService{
+			sendOrderReceiptFunc: func(email string, orderID string) error {
+				emailCalled = true
+				if email != "user@example.com" || orderID != "BN-123" {
+					t.Fatalf("unexpected email notification payload: %s %s", email, orderID)
+				}
+				return nil
+			},
+			sendOrderConfirmationFunc: func(phone string, orderID string) error {
+				smsCalled = true
+				if phone != "+15555550123" || orderID != "BN-123" {
+					t.Fatalf("unexpected sms notification payload: %s %s", phone, orderID)
+				}
+				return nil
+			},
+		},
+	}
+
+	svc.sendOrderNotifications(context.Background(), userID, "BN-123")
+
+	if !emailCalled || !smsCalled {
+		t.Fatalf("expected both email and sms notifications, got email=%v sms=%v", emailCalled, smsCalled)
+	}
+}
+
 func TestCancelOrder_StartsRefundForPaidOrder(t *testing.T) {
 	userID := uuid.New()
 	orderID := uuid.New()
@@ -460,14 +577,16 @@ func TestCancelOrder_StartsRefundForPaidOrder(t *testing.T) {
 	paid := domain.PaymentPaid
 	refundInitiatedCalled := false
 	cancelCalled := false
+	smsCalled := make(chan struct{}, 1)
 
-	svc := NewOrderService(
+	svc := NewOrderServiceWithNotification(
 		&noopTransactionManager{},
 		&mockOrderRepository{
 			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
 				return domain.Order{
 					ID:            orderID,
 					UserID:        userID,
+					OrderNumber:   "BN-200",
 					Status:        domain.OrderPending,
 					PaymentMethod: ptrPaymentMethod(domain.PaymentUPI),
 					PaymentStatus: &paid,
@@ -490,6 +609,23 @@ func TestCancelOrder_StartsRefundForPaidOrder(t *testing.T) {
 			},
 		},
 		&mockCartRepository{},
+		&mockUserRepository{
+			findByIDFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.User, error) {
+				if gotUserID != userID {
+					t.Fatalf("unexpected user id: %s", gotUserID)
+				}
+				return domain.User{ID: userID, Mobile: "+15555550123"}, nil
+			},
+		},
+		&mockNotificationService{
+			sendOrderCancellationFunc: func(phone string, orderNumber string, gotReason string) error {
+				if phone != "+15555550123" || orderNumber != "BN-200" || gotReason != reason {
+					t.Fatalf("unexpected cancellation sms payload: %s %s %s", phone, orderNumber, gotReason)
+				}
+				smsCalled <- struct{}{}
+				return nil
+			},
+		},
 	)
 
 	_, err := svc.CancelOrder(context.Background(), userID, domain.OrderCancelInput{
@@ -501,6 +637,11 @@ func TestCancelOrder_StartsRefundForPaidOrder(t *testing.T) {
 	}
 	if !refundInitiatedCalled || !cancelCalled {
 		t.Fatalf("expected refund initiation and cancel status update")
+	}
+	select {
+	case <-smsCalled:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected cancellation sms to be sent")
 	}
 }
 
@@ -672,12 +813,13 @@ func TestCancelOrder_UserCanCancelFailedOrder(t *testing.T) {
 	orderID := uuid.New()
 	reason := "Customer requested cancellation"
 	cancelCalled := false
+	smsCalled := make(chan struct{}, 1)
 
-	svc := NewOrderService(
+	svc := NewOrderServiceWithNotification(
 		&noopTransactionManager{},
 		&mockOrderRepository{
 			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
-				return domain.Order{ID: orderID, UserID: userID, Status: domain.OrderFailed}, nil
+				return domain.Order{ID: orderID, UserID: userID, OrderNumber: "BN-201", Status: domain.OrderFailed}, nil
 			},
 			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
 				cancelCalled = true
@@ -691,6 +833,20 @@ func TestCancelOrder_UserCanCancelFailedOrder(t *testing.T) {
 			},
 		},
 		&mockCartRepository{},
+		&mockUserRepository{
+			findByIDFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.User, error) {
+				return domain.User{ID: userID, Mobile: "+15555550123"}, nil
+			},
+		},
+		&mockNotificationService{
+			sendOrderCancellationFunc: func(phone string, orderNumber string, gotReason string) error {
+				if phone != "+15555550123" || orderNumber != "BN-201" || gotReason != reason {
+					t.Fatalf("unexpected cancellation sms payload: %s %s %s", phone, orderNumber, gotReason)
+				}
+				smsCalled <- struct{}{}
+				return nil
+			},
+		},
 	)
 
 	_, err := svc.CancelOrder(context.Background(), userID, domain.OrderCancelInput{
@@ -702,6 +858,11 @@ func TestCancelOrder_UserCanCancelFailedOrder(t *testing.T) {
 	}
 	if !cancelCalled {
 		t.Fatalf("expected cancel status update")
+	}
+	select {
+	case <-smsCalled:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected cancellation sms to be sent")
 	}
 }
 
