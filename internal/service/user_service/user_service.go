@@ -3,6 +3,7 @@ package user_service
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,6 +45,37 @@ func (s *userService) FindUser(
 	id uuid.UUID,
 ) (domain.User, error) {
 	return s.r.FindByID(ctx, id)
+}
+
+func (s *userService) GetUserProfile(
+	ctx context.Context,
+	id uuid.UUID,
+) (domain.UserProfile, error) {
+	user, err := s.r.FindByID(ctx, id)
+	if err != nil {
+		return domain.UserProfile{}, err
+	}
+
+	// Get user preferences
+	prefs, err := s.r.GetPreferencesByUserID(ctx, id)
+	if err != nil {
+		slog.Error("failed to get user preferences, defaulting to false for UseSMS", "userID", id, "error", err	)
+		prefs.UseSMS = false
+	}
+
+	// map to UserProfile and return
+	return domain.UserProfile{
+		ID:             user.ID,
+		FirstName:      user.FirstName,
+		LastName:       user.LastName,
+		Email:          user.Email,
+		Mobile:         user.Mobile,
+		Role:           user.Role,
+		EmailVerified:  user.EmailVerified,
+		MobileVerified: user.MobileVerified,
+		UseSMS:         prefs.UseSMS,
+		CreatedAt:      user.CreatedAt,
+	}, nil
 }
 
 func (s *userService) Register(
@@ -503,6 +535,14 @@ func (s *userService) ResendMobileOTP(
 			return errors.New("mobile already verified")
 		}
 
+		prefs, err := s.r.GetPreferencesByUserID(txCtx, user.ID)
+		if err != nil {
+			return err
+		}
+		if !prefs.UseSMS {
+			return nil
+		}
+
 		// Invalidate old OTPs
 		if err := s.vtr.InvalidateByUserAndType(
 			txCtx,
@@ -547,4 +587,30 @@ func (s *userService) DeleteUser(
 	id uuid.UUID,
 ) error {
 	return s.r.Delete(ctx, id)
+}
+
+func (s *userService) UpdateUserPreferences(
+	ctx context.Context,
+	userID uuid.UUID,
+	in domain.UserPreferencesInput,
+) (domain.UserPreferences, error) {
+	// Check if user exists
+	_, err := s.r.FindByID(ctx, userID)
+	if err != nil {
+		return domain.UserPreferences{}, err
+	}
+
+	// Update preferences
+	prefs := domain.UserPreferences{
+		UserID: userID,
+		UseSMS: in.UseSMS,
+	}
+
+	// Save preferences
+	if err := s.r.UpdatePreferences(ctx, &prefs); err != nil {
+		return domain.UserPreferences{}, err
+	}
+
+	// Return updated preferences
+	return s.r.GetPreferencesByUserID(ctx, userID)
 }

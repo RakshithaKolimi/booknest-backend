@@ -16,12 +16,14 @@ import (
 
 // MockUserRepository is a mock implementation of domain.UserRepository
 type MockUserRepository struct {
-	CreateFunc       func(ctx context.Context, user *domain.User) error
-	FindByIDFunc     func(ctx context.Context, id uuid.UUID) (domain.User, error)
-	FindByEmailFunc  func(ctx context.Context, email string) (domain.User, error)
-	FindByMobileFunc func(ctx context.Context, mobile string) (domain.User, error)
-	UpdateFunc       func(ctx context.Context, user *domain.User) error
-	DeleteFunc       func(ctx context.Context, id uuid.UUID) error
+	CreateFunc                 func(ctx context.Context, user *domain.User) error
+	FindByIDFunc               func(ctx context.Context, id uuid.UUID) (domain.User, error)
+	FindByEmailFunc            func(ctx context.Context, email string) (domain.User, error)
+	FindByMobileFunc           func(ctx context.Context, mobile string) (domain.User, error)
+	GetPreferencesByUserIDFunc func(ctx context.Context, userID uuid.UUID) (domain.UserPreferences, error)
+	UpdatePreferencesFunc      func(ctx context.Context, prefs *domain.UserPreferences) error
+	UpdateFunc                 func(ctx context.Context, user *domain.User) error
+	DeleteFunc                 func(ctx context.Context, id uuid.UUID) error
 }
 
 func (m *MockUserRepository) Create(ctx context.Context, user *domain.User) error {
@@ -50,6 +52,20 @@ func (m *MockUserRepository) FindByMobile(ctx context.Context, mobile string) (d
 		return m.FindByMobileFunc(ctx, mobile)
 	}
 	return domain.User{}, errors.New("not implemented")
+}
+
+func (m *MockUserRepository) GetPreferencesByUserID(ctx context.Context, userID uuid.UUID) (domain.UserPreferences, error) {
+	if m.GetPreferencesByUserIDFunc != nil {
+		return m.GetPreferencesByUserIDFunc(ctx, userID)
+	}
+	return domain.UserPreferences{}, errors.New("not implemented")
+}
+
+func (m *MockUserRepository) UpdatePreferences(ctx context.Context, prefs *domain.UserPreferences) error {
+	if m.UpdatePreferencesFunc != nil {
+		return m.UpdatePreferencesFunc(ctx, prefs)
+	}
+	return nil
 }
 
 func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) error {

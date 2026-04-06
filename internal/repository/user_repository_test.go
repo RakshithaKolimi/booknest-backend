@@ -14,7 +14,7 @@ import (
 )
 
 func TestUserRepo_FindByID(t *testing.T) {
-	db := setupTestDB(t, &domain.User{})
+	db := setupTestDB(t, &domain.User{}, &domain.UserPreferences{})
 
 	user := domain.User{
 		ID:        uuid.New(),
@@ -35,7 +35,7 @@ func TestUserRepo_FindByID(t *testing.T) {
 }
 
 func TestUserRepo_FindByEmail(t *testing.T) {
-	db := setupTestDB(t, &domain.User{})
+	db := setupTestDB(t, &domain.User{}, &domain.UserPreferences{})
 
 	user := domain.User{
 		ID:        uuid.New(),
@@ -56,7 +56,7 @@ func TestUserRepo_FindByEmail(t *testing.T) {
 }
 
 func TestUserRepo_FindByMobile(t *testing.T) {
-	db := setupTestDB(t,&domain.User{})
+	db := setupTestDB(t, &domain.User{}, &domain.UserPreferences{})
 
 	user := domain.User{
 		ID:        uuid.New(),
@@ -112,10 +112,47 @@ func TestUserRepo_Create(t *testing.T) {
 				AddRow(user.ID, time.Now(), time.Now()),
 		)
 
+	mock.ExpectExec("INSERT INTO user_preferences").
+		WithArgs(user.ID, false).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
 	err = repo.Create(context.Background(), user)
 
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserRepo_GetPreferencesByUserID(t *testing.T) {
+	db := setupTestDB(t, &domain.User{}, &domain.UserPreferences{})
+
+	userID := uuid.New()
+	prefs := domain.UserPreferences{
+		UserID: userID,
+		UseSMS: false,
+	}
+
+	require.NoError(t, db.Create(&prefs).Error)
+
+	repo := &userRepo{gorm: db}
+
+	found, err := repo.GetPreferencesByUserID(context.Background(), userID)
+
+	require.NoError(t, err)
+	require.Equal(t, userID, found.UserID)
+	require.False(t, found.UseSMS)
+}
+
+func TestUserRepo_GetPreferencesByUserID_DefaultsWhenMissing(t *testing.T) {
+	db := setupTestDB(t, &domain.User{}, &domain.UserPreferences{})
+
+	userID := uuid.New()
+	repo := &userRepo{gorm: db}
+
+	found, err := repo.GetPreferencesByUserID(context.Background(), userID)
+
+	require.NoError(t, err)
+	require.Equal(t, userID, found.UserID)
+	require.False(t, found.UseSMS)
 }
 
 func TestUserRepo_Update(t *testing.T) {

@@ -2,12 +2,14 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"booknest/internal/domain"
 )
@@ -74,6 +76,75 @@ func (r *userRepo) FindByMobile(
 	return user, err
 }
 
+func (r *userRepo) GetPreferencesByUserID(
+	ctx context.Context,
+	userID uuid.UUID,
+) (domain.UserPreferences, error) {
+	var prefs domain.UserPreferences
+
+	if r.db != nil {
+		query := `
+			SELECT user_id, use_sms, created_at, updated_at, deleted_at
+			FROM user_preferences
+			WHERE user_id = $1 AND deleted_at IS NULL;
+		`
+
+		row := queryRowWithTx(ctx, r.db, query, userID)
+		err := row.Scan(
+			&prefs.UserID,
+			&prefs.UseSMS,
+			&prefs.CreatedAt,
+			&prefs.UpdatedAt,
+			&prefs.DeletedAt,
+		)
+		if err == sql.ErrNoRows {
+			return domain.UserPreferences{
+				UserID: userID,
+				UseSMS: false,
+			}, nil
+		}
+		return prefs, err
+	}
+
+	err := r.gorm.
+		WithContext(ctx).
+		Where("user_id = ?", userID).
+		First(&prefs).
+		Error
+	if err == gorm.ErrRecordNotFound {
+		return domain.UserPreferences{
+			UserID: userID,
+			UseSMS: false,
+		}, nil
+	}
+
+	return prefs, err
+}
+
+func (r *userRepo) UpdatePreferences(
+	ctx context.Context,
+	prefs *domain.UserPreferences,
+) error {
+	if r.db != nil {
+		query := `
+			INSERT INTO user_preferences (user_id, use_sms, created_at, updated_at)
+			VALUES ($1, $2, NOW(), NOW())
+			ON CONFLICT (user_id)
+			DO UPDATE SET use_sms = EXCLUDED.use_sms, updated_at = NOW();
+		`
+
+		if err := execWithTx(ctx, r.db, query, prefs.UserID, prefs.UseSMS); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return r.gorm.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"use_sms", "updated_at"}),
+	}).Create(prefs).Error
+}
+
 func (r *userRepo) Create(ctx context.Context, user *domain.User) error {
 	query, args, err := r.sb.
 		Insert("users").
@@ -108,12 +179,25 @@ func (r *userRepo) Create(ctx context.Context, user *domain.User) error {
 	}
 
 	row := queryRowWithTx(ctx, r.db, query, args...)
-
-	return row.Scan(
+	if err := row.Scan(
 		&user.ID,
 		&user.CreatedAt,
 		&user.UpdatedAt,
-	)
+	); err != nil {
+		return err
+	}
+
+	if err := execWithTx(
+		ctx,
+		r.db,
+		`INSERT INTO user_preferences (user_id, use_sms, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())`,
+		user.ID,
+		false,
+	); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *userRepo) Update(ctx context.Context, user *domain.User) error {

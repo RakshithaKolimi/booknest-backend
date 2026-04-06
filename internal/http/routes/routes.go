@@ -11,8 +11,9 @@ const (
 	BookIDRoute      = "/book/:id"
 	BookReviewsRoute = "/books/:id/reviews"
 
-	UsersRoute = "/users"
-	UserRoute  = "/user/:id"
+	UsersRoute           = "/users"
+	UserRoute            = "/user/:id"
+	UserPreferencesRoute = "/user/:id/preferences"
 
 	ForgotPassword       = "/forgot-password"
 	LoginRoute           = "/login"

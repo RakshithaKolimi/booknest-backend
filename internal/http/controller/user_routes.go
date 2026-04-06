@@ -26,6 +26,7 @@ func RegisterUserRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, rdb *redi
 	protected.Use(middleware.JWTAuthMiddleware(jwtConfig))
 	{
 		protected.GET(routes.UserRoute, controller.GetUser)
+		protected.PUT(routes.UserPreferencesRoute, controller.UpdateUserPreferences)
 		protected.DELETE(routes.UserRoute, controller.DeleteUser)
 		protected.POST(routes.VerifyMobileRoute, controller.VerifyMobile)
 		protected.POST(routes.ResendMobileOTPRoute, controller.ResendMobileOTP)

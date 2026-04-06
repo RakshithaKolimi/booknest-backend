@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"booknest/internal/domain"
 )
@@ -18,6 +19,7 @@ import (
 // MockUserService is a mock implementation of domain.UserService
 type MockUserService struct {
 	FindUserFunc                       func(ctx context.Context, id uuid.UUID) (domain.User, error)
+	GetUserProfileFunc                 func(ctx context.Context, id uuid.UUID) (domain.UserProfile, error)
 	RegisterFunc                       func(ctx context.Context, in domain.UserInput) error
 	RegisterAdminFunc                  func(ctx context.Context, in domain.AdminRegistrationInput) error
 	LoginFunc                          func(ctx context.Context, in domain.LoginInput) (domain.AuthTokens, error)
@@ -30,6 +32,7 @@ type MockUserService struct {
 	ResendEmailVerificationFunc        func(ctx context.Context, userID uuid.UUID) error
 	ResendEmailVerificationByEmailFunc func(ctx context.Context, email string) error
 	ResendMobileOTPFunc                func(ctx context.Context, userID uuid.UUID) error
+	UpdateUserPreferencesFunc          func(ctx context.Context, userID uuid.UUID, in domain.UserPreferencesInput) (domain.UserPreferences, error)
 	DeleteUserFunc                     func(ctx context.Context, id uuid.UUID) error
 }
 
@@ -39,6 +42,13 @@ func (m *MockUserService) FindUser(ctx context.Context, id uuid.UUID) (domain.Us
 		return m.FindUserFunc(ctx, id)
 	}
 	return domain.User{}, errors.New("not implemented")
+}
+
+func (m *MockUserService) GetUserProfile(ctx context.Context, id uuid.UUID) (domain.UserProfile, error) {
+	if m.GetUserProfileFunc != nil {
+		return m.GetUserProfileFunc(ctx, id)
+	}
+	return domain.UserProfile{}, errors.New("not implemented")
 }
 
 func (m *MockUserService) Register(ctx context.Context, in domain.UserInput) error {
@@ -123,6 +133,13 @@ func (m *MockUserService) ResendMobileOTP(ctx context.Context, userID uuid.UUID)
 		return m.ResendMobileOTPFunc(ctx, userID)
 	}
 	return errors.New("not implemented")
+}
+
+func (m *MockUserService) UpdateUserPreferences(ctx context.Context, userID uuid.UUID, in domain.UserPreferencesInput) (domain.UserPreferences, error) {
+	if m.UpdateUserPreferencesFunc != nil {
+		return m.UpdateUserPreferencesFunc(ctx, userID, in)
+	}
+	return domain.UserPreferences{}, errors.New("not implemented")
 }
 
 func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) error {
@@ -346,12 +363,13 @@ func TestGetUser_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	mockService := &MockUserService{
-		FindUserFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
-			return domain.User{
+		GetUserProfileFunc: func(ctx context.Context, id uuid.UUID) (domain.UserProfile, error) {
+			return domain.UserProfile{
 				ID:        id,
 				FirstName: "John",
 				LastName:  "Doe",
 				Email:     "john@example.com",
+				UseSMS:    false,
 			}, nil
 		},
 	}
@@ -722,8 +740,8 @@ func TestUserControllerGetUserDirect(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	ctl := NewUserController(&MockUserService{
-		FindUserFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
-			return domain.User{ID: id, Email: "jane@example.com"}, nil
+		GetUserProfileFunc: func(ctx context.Context, id uuid.UUID) (domain.UserProfile, error) {
+			return domain.UserProfile{ID: id, Email: "jane@example.com", UseSMS: false}, nil
 		},
 	}).(*userController)
 
@@ -846,8 +864,8 @@ func TestUserControllerHandlerErrorsDirect(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.New()
 	ctl := NewUserController(&MockUserService{
-		FindUserFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
-			return domain.User{}, errors.New("not found")
+		GetUserProfileFunc: func(ctx context.Context, id uuid.UUID) (domain.UserProfile, error) {
+			return domain.UserProfile{}, gorm.ErrRecordNotFound
 		},
 		ResetPasswordWithTokenFunc: func(ctx context.Context, rawToken, newPassword string) error {
 			return errors.New("invalid token")
@@ -856,7 +874,10 @@ func TestUserControllerHandlerErrorsDirect(t *testing.T) {
 		VerifyMobileFunc:                   func(ctx context.Context, otp string) error { return errors.New("bad otp") },
 		ResendEmailVerificationByEmailFunc: func(ctx context.Context, email string) error { return errors.New("boom") },
 		ResendMobileOTPFunc:                func(ctx context.Context, gotUserID uuid.UUID) error { return errors.New("boom") },
-		ResetPasswordFunc:                  func(ctx context.Context, gotUserID uuid.UUID, newPassword string) error { return errors.New("boom") },
+		UpdateUserPreferencesFunc: func(ctx context.Context, userID uuid.UUID, in domain.UserPreferencesInput) (domain.UserPreferences, error) {
+			return domain.UserPreferences{}, errors.New("boom")
+		},
+		ResetPasswordFunc: func(ctx context.Context, gotUserID uuid.UUID, newPassword string) error { return errors.New("boom") },
 	}).(*userController)
 
 	t.Run("get user invalid id", func(t *testing.T) {
@@ -878,6 +899,23 @@ func TestUserControllerHandlerErrorsDirect(t *testing.T) {
 		ctl.GetUser(c)
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", w.Code)
+		}
+	})
+
+	t.Run("get user internal error", func(t *testing.T) {
+		ctlInternal := NewUserController(&MockUserService{
+			GetUserProfileFunc: func(ctx context.Context, id uuid.UUID) (domain.UserProfile, error) {
+				return domain.UserProfile{}, errors.New("preferences lookup failed")
+			},
+		}).(*userController)
+
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: uuid.New().String()}}
+		c.Request = httptest.NewRequest(http.MethodGet, "/user/x", nil)
+		ctlInternal.GetUser(c)
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", w.Code)
 		}
 	})
 

@@ -962,6 +962,9 @@ func TestResendEmailVerification_SuccessAndAlreadyVerified(t *testing.T) {
 					FindByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
 						return tc.user, nil
 					},
+					GetPreferencesByUserIDFunc: func(ctx context.Context, userID uuid.UUID) (domain.UserPreferences, error) {
+						return domain.UserPreferences{UserID: userID, UseSMS: tc.wantCreate}, nil
+					},
 				},
 				vtr: &MockVerificationTokenRepository{
 					InvalidateByUserAndTypeFunc: func(ctx context.Context, gotUserID uuid.UUID, tokenType domain.VerificationTokenType) error {
@@ -987,6 +990,9 @@ func TestResendEmailVerification_SuccessAndAlreadyVerified(t *testing.T) {
 			}
 			if tc.wantCreate && (created != 1 || invalidated != 1) {
 				t.Fatalf("expected create and invalidate once, got create=%d invalidate=%d", created, invalidated)
+			}
+			if !tc.wantCreate && tc.wantErr == "" && (created != 0 || invalidated != 0) {
+				t.Fatalf("expected no otp work when sms is disabled, got create=%d invalidate=%d", created, invalidated)
 			}
 		})
 	}
@@ -1021,6 +1027,9 @@ func TestResendMobileOTP_SuccessAndAlreadyVerified(t *testing.T) {
 				r: &MockUserRepository{
 					FindByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
 						return tc.user, nil
+					},
+					GetPreferencesByUserIDFunc: func(ctx context.Context, userID uuid.UUID) (domain.UserPreferences, error) {
+						return domain.UserPreferences{UserID: userID, UseSMS: tc.wantCreate}, nil
 					},
 				},
 				vtr: &MockVerificationTokenRepository{
@@ -1239,6 +1248,9 @@ func TestResendMobileOTP_CreatesNewOTPToken(t *testing.T) {
 			FindByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
 				return domain.User{ID: id, Mobile: "+911111111111"}, nil
 			},
+			GetPreferencesByUserIDFunc: func(ctx context.Context, userID uuid.UUID) (domain.UserPreferences, error) {
+				return domain.UserPreferences{UserID: userID, UseSMS: true}, nil
+			},
 		},
 		vtr: &MockVerificationTokenRepository{
 			InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
@@ -1260,6 +1272,42 @@ func TestResendMobileOTP_CreatesNewOTPToken(t *testing.T) {
 	}
 	if created != 1 {
 		t.Fatalf("expected one token creation, got %d", created)
+	}
+}
+
+func TestResendMobileOTP_SkipsWhenSMSPreferenceDisabled(t *testing.T) {
+	userID := uuid.New()
+	created := 0
+	invalidated := 0
+
+	service := &userService{
+		txm: &noopTransactionManager{},
+		r: &MockUserRepository{
+			FindByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+				return domain.User{ID: id, Mobile: "+911111111111"}, nil
+			},
+			GetPreferencesByUserIDFunc: func(ctx context.Context, userID uuid.UUID) (domain.UserPreferences, error) {
+				return domain.UserPreferences{UserID: userID, UseSMS: false}, nil
+			},
+		},
+		vtr: &MockVerificationTokenRepository{
+			InvalidateByUserAndTypeFunc: func(ctx context.Context, id uuid.UUID, tokenType domain.VerificationTokenType) error {
+				invalidated++
+				return nil
+			},
+			CreateFunc: func(ctx context.Context, token *domain.VerificationToken) error {
+				created++
+				return nil
+			},
+		},
+	}
+
+	err := service.ResendMobileOTP(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if created != 0 || invalidated != 0 {
+		t.Fatalf("expected no otp work when sms is disabled, got create=%d invalidate=%d", created, invalidated)
 	}
 }
 

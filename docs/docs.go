@@ -2225,16 +2225,42 @@ const docTemplate = `{
             ],
             "properties": {
                 "cancellation_reason": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Out of stock after payment failure."
                 },
                 "order_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440005"
                 },
                 "payment_status": {
-                    "$ref": "#/definitions/PaymentStatus"
+                    "enum": [
+                        "PENDING",
+                        "PAID",
+                        "REFUND_INITIATED",
+                        "REFUNDED",
+                        "FAILED"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/PaymentStatus"
+                        }
+                    ],
+                    "example": "PAID"
                 },
                 "status": {
-                    "$ref": "#/definitions/domain.OrderStatus"
+                    "enum": [
+                        "PENDING",
+                        "FAILED",
+                        "CANCELLED",
+                        "COMPLETED"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.OrderStatus"
+                        }
+                    ],
+                    "example": "COMPLETED"
                 }
             }
         },
@@ -2249,21 +2275,26 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "admin@booknest.com"
                 },
                 "first_name": {
                     "type": "string",
-                    "minLength": 3
+                    "minLength": 3,
+                    "example": "Admin"
                 },
                 "last_name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "User"
                 },
                 "mobile": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+919876543211"
                 },
                 "password": {
                     "type": "string",
-                    "minLength": 6
+                    "minLength": 6,
+                    "example": "Admin@123"
                 }
             }
         },
@@ -2271,19 +2302,28 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T10:30:00Z"
                 },
                 "deleted_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-07T09:00:00Z"
                 },
                 "id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "George Orwell"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T11:45:00Z"
                 }
             }
         },
@@ -2295,7 +2335,8 @@ const docTemplate = `{
             "properties": {
                 "name": {
                     "type": "string",
-                    "minLength": 2
+                    "minLength": 2,
+                    "example": "George Orwell"
                 }
             }
         },
@@ -2306,13 +2347,17 @@ const docTemplate = `{
                     "$ref": "#/definitions/Author"
                 },
                 "author_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
                 "available_stock": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 24
                 },
                 "average_rating": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 4.7
                 },
                 "categories": {
                     "type": "array",
@@ -2321,46 +2366,64 @@ const docTemplate = `{
                     }
                 },
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T10:30:00Z"
                 },
                 "deleted_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-07T09:00:00Z"
                 },
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "A dystopian novel set in a totalitarian society ruled by Big Brother."
                 },
                 "discount_percentage": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 10
                 },
                 "id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440003"
                 },
                 "image_url": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "https://cdn.booknest.example/books/1984.jpg"
                 },
                 "is_active": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "isbn": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "9780451524935"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "1984"
                 },
                 "price": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 499.99
                 },
                 "publisher": {
                     "$ref": "#/definitions/Publisher"
                 },
                 "publisher_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440002"
                 },
                 "total_reviews": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 128
                 },
                 "updated_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T11:45:00Z"
                 }
             }
         },
@@ -2371,41 +2434,58 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "example": [
+                        "550e8400-e29b-41d4-a716-446655440000"
+                    ]
                 },
                 "category_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "example": [
+                        "550e8400-e29b-41d4-a716-446655440001"
+                    ]
                 },
                 "ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "example": [
+                        "550e8400-e29b-41d4-a716-446655440003"
+                    ]
                 },
                 "is_active": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "max_price": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 500
                 },
                 "min_price": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 100
                 },
                 "min_stock": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 1
                 },
                 "publisher_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "example": [
+                        "550e8400-e29b-41d4-a716-446655440002"
+                    ]
                 },
                 "search": {
                     "description": "name / author / isbn",
-                    "type": "string"
+                    "type": "string",
+                    "example": "orwell"
                 }
             }
         },
@@ -2418,43 +2498,59 @@ const docTemplate = `{
             ],
             "properties": {
                 "author_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
                 "author_name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "George Orwell"
                 },
                 "available_stock": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 24
                 },
                 "category_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "example": [
+                        "550e8400-e29b-41d4-a716-446655440001"
+                    ]
                 },
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "A dystopian novel set in a totalitarian society ruled by Big Brother."
                 },
                 "discount_percentage": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 10
                 },
                 "image_url": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "https://cdn.booknest.example/books/1984.jpg"
                 },
                 "is_active": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "isbn": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "9780451524935"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "1984"
                 },
                 "price": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 499.99
                 },
                 "publisher_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440002"
                 }
             }
         },
@@ -2462,7 +2558,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "has_more": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "items": {
                     "type": "array",
@@ -2471,16 +2568,20 @@ const docTemplate = `{
                     }
                 },
                 "limit": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 10
                 },
                 "next_cursor": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "MjAyNi0wNC0wNlQxMTo0NTowMFo="
                 },
                 "offset": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 0
                 },
                 "total": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 42
                 }
             }
         },
@@ -2488,25 +2589,33 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "author_name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "George Orwell"
                 },
                 "book_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440003"
                 },
                 "count": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 2
                 },
                 "image_url": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "https://cdn.booknest.example/books/1984.jpg"
                 },
                 "line_total": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 899.98
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "1984"
                 },
                 "unit_price": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 449.99
                 }
             }
         },
@@ -2518,11 +2627,14 @@ const docTemplate = `{
             ],
             "properties": {
                 "book_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440003"
                 },
                 "count": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "example": 2
                 }
             }
         },
@@ -2530,7 +2642,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "cart_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440006"
                 },
                 "items": {
                     "type": "array",
@@ -2539,13 +2653,17 @@ const docTemplate = `{
                     }
                 },
                 "subtotal": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 899.98
                 },
                 "total_items": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 2
                 },
                 "user_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440004"
                 }
             }
         },
@@ -2553,19 +2671,28 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T10:30:00Z"
                 },
                 "deleted_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-07T09:00:00Z"
                 },
                 "id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Fiction"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T11:45:00Z"
                 }
             }
         },
@@ -2576,7 +2703,19 @@ const docTemplate = `{
             ],
             "properties": {
                 "payment_method": {
-                    "$ref": "#/definitions/domain.PaymentMethod"
+                    "enum": [
+                        "COD",
+                        "CREDIT_CARD",
+                        "DEBIT_CARD",
+                        "NET_BANKING",
+                        "UPI"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.PaymentMethod"
+                        }
+                    ],
+                    "example": "UPI"
                 }
             }
         },
@@ -2584,10 +2723,12 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "rakshitha@example.com"
                 },
                 "mobile": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+919876543210"
                 }
             }
         },
@@ -2598,13 +2739,16 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "rakshitha@example.com"
                 },
                 "mobile": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+919876543210"
                 },
                 "password": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Password@123"
                 }
             }
         },
@@ -2612,40 +2756,88 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "cancellation_reason": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Customer requested cancellation before dispatch."
                 },
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T10:30:00Z"
                 },
                 "deleted_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-07T09:00:00Z"
                 },
                 "id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440005"
                 },
                 "order_number": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "ORD-20260406-0001"
                 },
                 "payment_method": {
-                    "$ref": "#/definitions/domain.PaymentMethod"
+                    "enum": [
+                        "COD",
+                        "CREDIT_CARD",
+                        "DEBIT_CARD",
+                        "NET_BANKING",
+                        "UPI"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.PaymentMethod"
+                        }
+                    ],
+                    "example": "UPI"
                 },
                 "payment_status": {
-                    "$ref": "#/definitions/PaymentStatus"
+                    "enum": [
+                        "PENDING",
+                        "PAID",
+                        "REFUND_INITIATED",
+                        "REFUNDED",
+                        "FAILED"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/PaymentStatus"
+                        }
+                    ],
+                    "example": "PAID"
                 },
                 "status": {
-                    "$ref": "#/definitions/domain.OrderStatus"
+                    "enum": [
+                        "PENDING",
+                        "FAILED",
+                        "CANCELLED",
+                        "COMPLETED"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.OrderStatus"
+                        }
+                    ],
+                    "example": "COMPLETED"
                 },
                 "total_price": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 899.98
                 },
                 "updated_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T11:45:00Z"
                 },
                 "user": {
                     "$ref": "#/definitions/User"
                 },
                 "user_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440004"
                 }
             }
         },
@@ -2657,10 +2849,13 @@ const docTemplate = `{
             ],
             "properties": {
                 "cancellation_reason": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Customer requested cancellation before dispatch."
                 },
                 "order_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440005"
                 }
             }
         },
@@ -2668,22 +2863,29 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "book_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440003"
                 },
                 "count": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 2
                 },
                 "image_url": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "https://cdn.booknest.example/books/1984.jpg"
                 },
                 "line_total": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 899.98
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "1984"
                 },
                 "unit_price": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 449.99
                 }
             }
         },
@@ -2708,10 +2910,13 @@ const docTemplate = `{
             ],
             "properties": {
                 "order_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440005"
                 },
                 "success": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },
@@ -2736,46 +2941,64 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "address": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "1745 Broadway, New York, NY"
                 },
                 "city": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "New York"
                 },
                 "country": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "USA"
                 },
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T10:30:00Z"
                 },
                 "deleted_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-07T09:00:00Z"
                 },
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "contact@penguinrandomhouse.com"
                 },
                 "id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440002"
                 },
                 "is_active": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "legal_name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Penguin Random House LLC"
                 },
                 "mobile": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+919876543210"
                 },
                 "state": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "New York"
                 },
                 "trading_name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Penguin Random House"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T11:45:00Z"
                 },
                 "zipcode": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "10019"
                 }
             }
         },
@@ -2795,33 +3018,42 @@ const docTemplate = `{
             "properties": {
                 "address": {
                     "type": "string",
-                    "minLength": 3
+                    "minLength": 3,
+                    "example": "1745 Broadway, New York, NY"
                 },
                 "city": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "New York"
                 },
                 "country": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "USA"
                 },
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "contact@penguinrandomhouse.com"
                 },
                 "legal_name": {
                     "type": "string",
-                    "minLength": 3
+                    "minLength": 3,
+                    "example": "Penguin Random House LLC"
                 },
                 "mobile": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+919876543210"
                 },
                 "state": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "New York"
                 },
                 "trading_name": {
                     "type": "string",
-                    "minLength": 3
+                    "minLength": 3,
+                    "example": "Penguin Random House"
                 },
                 "zipcode": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "10019"
                 }
             }
         },
@@ -2832,31 +3064,45 @@ const docTemplate = `{
                     "$ref": "#/definitions/Book"
                 },
                 "book_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440003"
                 },
                 "comment": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Thought-provoking and timeless."
                 },
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T10:30:00Z"
                 },
                 "deleted_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-07T09:00:00Z"
                 },
                 "id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440007"
                 },
                 "rating": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 5
                 },
                 "updated_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T11:45:00Z"
                 },
                 "user": {
                     "$ref": "#/definitions/User"
                 },
                 "user_id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440004"
                 }
             }
         },
@@ -2867,12 +3113,14 @@ const docTemplate = `{
             ],
             "properties": {
                 "comment": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Thought-provoking and timeless."
                 },
                 "rating": {
                     "type": "integer",
                     "maximum": 5,
-                    "minimum": 1
+                    "minimum": 1,
+                    "example": 5
                 }
             }
         },
@@ -2894,10 +3142,12 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "average_rating": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 4.7
                 },
                 "total_reviews": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 128
                 }
             }
         },
@@ -2905,43 +3155,69 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T10:30:00Z"
                 },
                 "deleted_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-07T09:00:00Z"
                 },
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "rakshitha@example.com"
                 },
                 "email_verified": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "first_name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Rakshitha"
                 },
                 "id": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "550e8400-e29b-41d4-a716-446655440004"
                 },
                 "is_active": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "last_login": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T11:45:00Z"
                 },
                 "last_name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Koli"
                 },
                 "mobile": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+919876543210"
                 },
                 "mobile_verified": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "role": {
-                    "$ref": "#/definitions/UserRole"
+                    "enum": [
+                        "USER",
+                        "ADMIN"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/UserRole"
+                        }
+                    ],
+                    "example": "USER"
                 },
                 "updated_at": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-04-06T11:45:00Z"
                 }
             }
         },
@@ -2957,24 +3233,38 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "rakshitha@example.com"
                 },
                 "first_name": {
                     "type": "string",
-                    "minLength": 3
+                    "minLength": 3,
+                    "example": "Rakshitha"
                 },
                 "last_name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Koli"
                 },
                 "mobile": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "+919876543210"
                 },
                 "password": {
                     "type": "string",
-                    "minLength": 6
+                    "minLength": 6,
+                    "example": "Password@123"
                 },
                 "role": {
-                    "$ref": "#/definitions/UserRole"
+                    "enum": [
+                        "USER",
+                        "ADMIN"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/UserRole"
+                        }
+                    ],
+                    "example": "USER"
                 }
             }
         },

@@ -9,14 +9,14 @@ import (
 
 // Author defines model for Author
 type Author struct {
-	ID   uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-	Name string    `gorm:"not null;uniqueIndex" json:"name"`
+	ID   uuid.UUID `gorm:"type:uuid;primaryKey" json:"id" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Name string    `gorm:"not null;uniqueIndex" json:"name" example:"George Orwell"`
 	BaseEntity
 } // @name Author
 
 // AuthorInput defines input model for Author
 type AuthorInput struct {
-	Name string `json:"name" binding:"required,min=2"`
+	Name string `json:"name" binding:"required,min=2" example:"George Orwell"`
 } // @name AuthorInput
 
 type AuthorRepository interface {

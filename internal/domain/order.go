@@ -9,25 +9,25 @@ import (
 
 // Order defines the model for Order
 type Order struct {
-	ID                 uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
-	OrderNumber        string         `gorm:"uniqueIndex;not null" json:"order_number"`
-	TotalPrice         float64        `gorm:"type:numeric(10,2)" json:"total_price"`
-	UserID             uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
+	ID                 uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440005"`
+	OrderNumber        string         `gorm:"uniqueIndex;not null" json:"order_number" example:"ORD-20260406-0001"`
+	TotalPrice         float64        `gorm:"type:numeric(10,2)" json:"total_price" example:"899.98"`
+	UserID             uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440004"`
 	User               User           `gorm:"foreignKey:UserID"`
-	PaymentMethod      *PaymentMethod `gorm:"type:payment_method" json:"payment_method,omitempty"`
-	PaymentStatus      *PaymentStatus `gorm:"type:payment_status" json:"payment_status,omitempty"`
-	Status             OrderStatus    `gorm:"type:order_status;default:PENDING" json:"status"`
-	CancellationReason *string        `gorm:"type:text" json:"cancellation_reason,omitempty"`
+	PaymentMethod      *PaymentMethod `gorm:"type:payment_method" json:"payment_method,omitempty" enums:"COD,CREDIT_CARD,DEBIT_CARD,NET_BANKING,UPI" example:"UPI"`
+	PaymentStatus      *PaymentStatus `gorm:"type:payment_status" json:"payment_status,omitempty" enums:"PENDING,PAID,REFUND_INITIATED,REFUNDED,FAILED" example:"PAID"`
+	Status             OrderStatus    `gorm:"type:order_status;default:PENDING" json:"status" enums:"PENDING,FAILED,CANCELLED,COMPLETED" example:"COMPLETED"`
+	CancellationReason *string        `gorm:"type:text" json:"cancellation_reason,omitempty" example:"Customer requested cancellation before dispatch."`
 	BaseEntity
 } // @name Order
 
 // OrderItem defines model for OrderItem
 type OrderItem struct {
-	OrderID       uuid.UUID `gorm:"type:uuid;primaryKey" json:"order_id"`
-	BookID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"book_id"`
-	PurchaseCount int       `gorm:"check:purchase_count > 0" json:"purchase_count"`
-	PurchasePrice float64   `gorm:"type:numeric(10,2)" json:"purchase_price"`
-	TotalPrice    float64   `gorm:"type:numeric(10,2)" json:"total_price"`
+	OrderID       uuid.UUID `gorm:"type:uuid;primaryKey" json:"order_id" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440005"`
+	BookID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"book_id" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440003"`
+	PurchaseCount int       `gorm:"check:purchase_count > 0" json:"purchase_count" example:"2"`
+	PurchasePrice float64   `gorm:"type:numeric(10,2)" json:"purchase_price" example:"449.99"`
+	TotalPrice    float64   `gorm:"type:numeric(10,2)" json:"total_price" example:"899.98"`
 	Book          Book      `gorm:"foreignKey:BookID"`
 	Order         Order     `gorm:"foreignKey:OrderID"`
 	BaseEntity
@@ -35,12 +35,12 @@ type OrderItem struct {
 
 // OrderItemDetail defines model for OrderItemDetail
 type OrderItemDetail struct {
-	BookID    uuid.UUID `json:"book_id"`
-	Name      string    `json:"name"`
-	ImageURL  *string   `json:"image_url,omitempty"`
-	UnitPrice float64   `json:"unit_price"`
-	Count     int       `json:"count"`
-	LineTotal float64   `json:"line_total"`
+	BookID    uuid.UUID `json:"book_id" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440003"`
+	Name      string    `json:"name" example:"1984"`
+	ImageURL  *string   `json:"image_url,omitempty" example:"https://cdn.booknest.example/books/1984.jpg"`
+	UnitPrice float64   `json:"unit_price" example:"449.99"`
+	Count     int       `json:"count" example:"2"`
+	LineTotal float64   `json:"line_total" example:"899.98"`
 } // @name OrderItemDetail
 
 // OrderView defines model for OrderView
@@ -51,27 +51,27 @@ type OrderView struct {
 
 // CheckoutInput defines input model for Checkout
 type CheckoutInput struct {
-	PaymentMethod PaymentMethod `json:"payment_method" binding:"required"`
+	PaymentMethod PaymentMethod `json:"payment_method" binding:"required" enums:"COD,CREDIT_CARD,DEBIT_CARD,NET_BANKING,UPI" example:"UPI"`
 } // @name CheckoutInput
 
 // PaymentConfirmInput defines input model for PaymentConfirm
 type PaymentConfirmInput struct {
-	OrderID uuid.UUID `json:"order_id" binding:"required"`
-	Success bool      `json:"success"`
+	OrderID uuid.UUID `json:"order_id" binding:"required" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440005"`
+	Success bool      `json:"success" example:"true"`
 } // @name PaymentConfirmInput
 
 // OrderCancelInput defines input model for user order cancellation
 type OrderCancelInput struct {
-	OrderID            uuid.UUID `json:"order_id" binding:"required"`
-	CancellationReason string    `json:"cancellation_reason" binding:"required"`
+	OrderID            uuid.UUID `json:"order_id" binding:"required" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440005"`
+	CancellationReason string    `json:"cancellation_reason" binding:"required" example:"Customer requested cancellation before dispatch."`
 } // @name OrderCancelInput
 
 // AdminOrderStatusUpdateInput defines input model for admin order status updates
 type AdminOrderStatusUpdateInput struct {
-	OrderID            uuid.UUID      `json:"order_id" binding:"required"`
-	Status             OrderStatus    `json:"status,omitempty"`
-	PaymentStatus      *PaymentStatus `json:"payment_status,omitempty"`
-	CancellationReason string         `json:"cancellation_reason,omitempty"`
+	OrderID            uuid.UUID      `json:"order_id" binding:"required" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440005"`
+	Status             OrderStatus    `json:"status,omitempty" enums:"PENDING,FAILED,CANCELLED,COMPLETED" example:"COMPLETED"`
+	PaymentStatus      *PaymentStatus `json:"payment_status,omitempty" enums:"PENDING,PAID,REFUND_INITIATED,REFUNDED,FAILED" example:"PAID"`
+	CancellationReason string         `json:"cancellation_reason,omitempty" example:"Out of stock after payment failure."`
 } // @name AdminOrderStatusUpdateInput
 
 type OrderRepository interface {

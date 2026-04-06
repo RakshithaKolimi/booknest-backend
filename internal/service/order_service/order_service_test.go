@@ -143,7 +143,9 @@ func (m *mockCartRepository) ClearCart(ctx context.Context, cartID uuid.UUID) er
 }
 
 type mockUserRepository struct {
-	findByIDFunc func(ctx context.Context, id uuid.UUID) (domain.User, error)
+	findByIDFunc               func(ctx context.Context, id uuid.UUID) (domain.User, error)
+	getPreferencesByUserIDFunc func(ctx context.Context, userID uuid.UUID) (domain.UserPreferences, error)
+	updatePreferencesFunc      func(ctx context.Context, prefs *domain.UserPreferences) error
 }
 
 func (m *mockUserRepository) Create(ctx context.Context, user *domain.User) error { return nil }
@@ -158,6 +160,19 @@ func (m *mockUserRepository) FindByEmail(ctx context.Context, email string) (dom
 }
 func (m *mockUserRepository) FindByMobile(ctx context.Context, mobile string) (domain.User, error) {
 	return domain.User{}, errors.New("not implemented")
+}
+func (m *mockUserRepository) GetPreferencesByUserID(ctx context.Context, userID uuid.UUID) (domain.UserPreferences, error) {
+	if m.getPreferencesByUserIDFunc != nil {
+		return m.getPreferencesByUserIDFunc(ctx, userID)
+	}
+	return domain.UserPreferences{}, errors.New("not implemented")
+}
+
+func (m *mockUserRepository) UpdatePreferences(ctx context.Context, prefs *domain.UserPreferences) error {
+	if m.updatePreferencesFunc != nil {
+		return m.updatePreferencesFunc(ctx, prefs)
+	}
+	return nil
 }
 func (m *mockUserRepository) Update(ctx context.Context, user *domain.User) error { return nil }
 func (m *mockUserRepository) Delete(ctx context.Context, id uuid.UUID) error      { return nil }
@@ -544,6 +559,12 @@ func TestSendOrderNotifications_SendsEmailAndSMS(t *testing.T) {
 					Mobile: "+15555550123",
 				}, nil
 			},
+			getPreferencesByUserIDFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.UserPreferences, error) {
+				if gotUserID != userID {
+					t.Fatalf("unexpected user id for prefs: %s", gotUserID)
+				}
+				return domain.UserPreferences{UserID: userID, UseSMS: true}, nil
+			},
 		},
 		notification: &mockNotificationService{
 			sendOrderReceiptFunc: func(email string, orderID string) error {
@@ -567,6 +588,46 @@ func TestSendOrderNotifications_SendsEmailAndSMS(t *testing.T) {
 
 	if !emailCalled || !smsCalled {
 		t.Fatalf("expected both email and sms notifications, got email=%v sms=%v", emailCalled, smsCalled)
+	}
+}
+
+func TestSendOrderNotifications_SkipsSMSWhenPreferenceDisabled(t *testing.T) {
+	userID := uuid.New()
+	emailCalled := false
+	smsCalled := false
+
+	svc := &orderService{
+		userRepo: &mockUserRepository{
+			findByIDFunc: func(ctx context.Context, id uuid.UUID) (domain.User, error) {
+				return domain.User{
+					ID:     userID,
+					Email:  "user@example.com",
+					Mobile: "+15555550123",
+				}, nil
+			},
+			getPreferencesByUserIDFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.UserPreferences, error) {
+				return domain.UserPreferences{UserID: gotUserID, UseSMS: false}, nil
+			},
+		},
+		notification: &mockNotificationService{
+			sendOrderReceiptFunc: func(email string, orderID string) error {
+				emailCalled = true
+				return nil
+			},
+			sendOrderConfirmationFunc: func(phone string, orderID string) error {
+				smsCalled = true
+				return nil
+			},
+		},
+	}
+
+	svc.sendOrderNotifications(context.Background(), userID, "BN-123")
+
+	if !emailCalled {
+		t.Fatalf("expected order receipt email to be sent")
+	}
+	if smsCalled {
+		t.Fatalf("expected sms to be skipped when preference is disabled")
 	}
 }
 
@@ -616,6 +677,9 @@ func TestCancelOrder_StartsRefundForPaidOrder(t *testing.T) {
 				}
 				return domain.User{ID: userID, Mobile: "+15555550123"}, nil
 			},
+			getPreferencesByUserIDFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.UserPreferences, error) {
+				return domain.UserPreferences{UserID: gotUserID, UseSMS: true}, nil
+			},
 		},
 		&mockNotificationService{
 			sendOrderCancellationFunc: func(phone string, orderNumber string, gotReason string) error {
@@ -642,6 +706,68 @@ func TestCancelOrder_StartsRefundForPaidOrder(t *testing.T) {
 	case <-smsCalled:
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("expected cancellation sms to be sent")
+	}
+}
+
+func TestCancelOrder_SkipsCancellationSMSWhenPreferenceDisabled(t *testing.T) {
+	userID := uuid.New()
+	orderID := uuid.New()
+	reason := "Need to cancel"
+	paid := domain.PaymentPaid
+	smsCalled := make(chan struct{}, 1)
+
+	svc := NewOrderServiceWithNotification(
+		&noopTransactionManager{},
+		&mockOrderRepository{
+			getOrderByIDFunc: func(ctx context.Context, gotOrderID uuid.UUID) (domain.Order, error) {
+				return domain.Order{
+					ID:            orderID,
+					UserID:        userID,
+					OrderNumber:   "BN-201",
+					Status:        domain.OrderPending,
+					PaymentMethod: ptrPaymentMethod(domain.PaymentUPI),
+					PaymentStatus: &paid,
+				}, nil
+			},
+			updateOrderPaymentFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.PaymentStatus, method domain.PaymentMethod) error {
+				return nil
+			},
+			updateOrderStatusFunc: func(ctx context.Context, gotOrderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
+				return nil
+			},
+			getOrderItemsFunc: func(ctx context.Context, gotOrderID uuid.UUID) ([]domain.OrderItemDetail, error) {
+				return []domain.OrderItemDetail{}, nil
+			},
+		},
+		&mockCartRepository{},
+		&mockUserRepository{
+			findByIDFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.User, error) {
+				return domain.User{ID: userID, Mobile: "+15555550123"}, nil
+			},
+			getPreferencesByUserIDFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.UserPreferences, error) {
+				return domain.UserPreferences{UserID: gotUserID, UseSMS: false}, nil
+			},
+		},
+		&mockNotificationService{
+			sendOrderCancellationFunc: func(phone string, orderNumber string, gotReason string) error {
+				smsCalled <- struct{}{}
+				return nil
+			},
+		},
+	)
+
+	_, err := svc.CancelOrder(context.Background(), userID, domain.OrderCancelInput{
+		OrderID:            orderID,
+		CancellationReason: reason,
+	})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+
+	select {
+	case <-smsCalled:
+		t.Fatalf("expected cancellation sms to be skipped")
+	case <-time.After(200 * time.Millisecond):
 	}
 }
 
@@ -836,6 +962,9 @@ func TestCancelOrder_UserCanCancelFailedOrder(t *testing.T) {
 		&mockUserRepository{
 			findByIDFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.User, error) {
 				return domain.User{ID: userID, Mobile: "+15555550123"}, nil
+			},
+			getPreferencesByUserIDFunc: func(ctx context.Context, gotUserID uuid.UUID) (domain.UserPreferences, error) {
+				return domain.UserPreferences{UserID: gotUserID, UseSMS: true}, nil
 			},
 		},
 		&mockNotificationService{

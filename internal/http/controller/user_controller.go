@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"booknest/internal/domain"
 )
@@ -195,13 +196,50 @@ func (c *userController) GetUser(ctx *gin.Context) {
 		return
 	}
 
-	user, err := c.service.FindUser(ctx, id)
+	user, err := c.service.GetUserProfile(ctx, id)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, user)
+}
+
+func (c *userController) UpdateUserPreferences(ctx *gin.Context) {
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	userIDFromCtx, err := getUserID(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if userIDFromCtx != id {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "you can only update your own preferences"})
+		return
+	}
+
+	var input domain.UserPreferencesInput
+	if err := ctx.ShouldBindJSON(&input); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	prefs, err := c.service.UpdateUserPreferences(ctx, id, input)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, prefs)
 }
 
 // DeleteUser godoc

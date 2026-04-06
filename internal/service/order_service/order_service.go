@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -222,6 +223,12 @@ func (s *orderService) sendOrderNotifications(ctx context.Context, userID uuid.U
 		return
 	}
 
+	// Check user preferences before sending SMS
+	if !s.userAllowsSMS(ctx, userID) {
+		slog.Info("user has not allowed SMS notifications, skipping order confirmation SMS", "userID", userID)
+		return
+	}
+
 	if err := s.notification.SendOrderConfirmation(user.Mobile, orderID); err != nil {
 		return
 	}
@@ -246,9 +253,28 @@ func (s *orderService) sendOrderCancellationNotification(
 		return
 	}
 
+	// Check user preferences before sending SMS
+	if !s.userAllowsSMS(ctx, userID) {
+		return
+	}
+
 	if err := s.notification.SendOrderCancellation(user.Mobile, orderID, reason); err != nil {
 		return
 	}
+}
+
+func (s *orderService) userAllowsSMS(ctx context.Context, userID uuid.UUID) bool {
+	if s.userRepo == nil {
+		return false
+	}
+
+	// Get user preferences
+	prefs, err := s.userRepo.GetPreferencesByUserID(ctx, userID)
+	if err != nil {
+		return false
+	}
+
+	return prefs.UseSMS
 }
 
 func (s *orderService) CancelOrder(
