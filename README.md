@@ -61,6 +61,14 @@ REDIS_DB=0
 # Optional: overrides the host shown in Swagger docs
 API_HOST=localhost:8080
 
+# Order service selection
+# Default behavior is the monolith order service.
+# Set either USE_ORDER_MICROSERVICE=true or ORDER_SERVICE_MODE=microservice
+# to route supported order operations through BookNest-OrderService instead.
+USE_ORDER_MICROSERVICE=false
+# ORDER_SERVICE_MODE=monolith
+ORDER_SERVICE_GRPC_ADDR=localhost:50051
+
 # Email SES Secrets
 SES_ACCESS_KEY=
 SES_SECRET_KEY=
@@ -78,6 +86,7 @@ Notes:
 - `godotenv.Load()` is required during startup, so `.env` needs to exist locally.
 - If `REDIS_ADDR` is empty, the app falls back to an in-memory login rate limiter.
 - Local CORS currently allows `http://localhost:3000` and `http://localhost:5173`.
+- Order routing defaults to the monolith. When microservice mode is enabled, checkout, confirm payment, and user order listing use gRPC; cancel/admin order endpoints still fall back to the monolith until matching RPCs exist.
 
 ## Local setup
 

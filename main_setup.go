@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -42,6 +43,48 @@ import (
 )
 
 var connectGORM = database.ConnectGORM
+
+type orderServiceRuntimeConfig struct {
+	UseMicroservice bool
+	GRPCAddress     string
+}
+
+func loadOrderServiceRuntimeConfig() (orderServiceRuntimeConfig, error) {
+	// Get gRPC address from env file and trim spaces
+	cfg := orderServiceRuntimeConfig{
+		// Get gRPC address from env file
+		GRPCAddress: strings.TrimSpace(os.Getenv("ORDER_SERVICE_GRPC_ADDR")),
+	}
+
+	// Check ORDER_SERVICE_MODE first for backward compatibility
+	if mode := strings.ToLower(strings.TrimSpace(os.Getenv("ORDER_SERVICE_MODE"))); mode != "" {
+		switch mode {
+		case "monolith":
+			cfg.UseMicroservice = false
+		case "microservice":
+			cfg.UseMicroservice = true
+		default:
+			return orderServiceRuntimeConfig{}, fmt.Errorf("invalid ORDER_SERVICE_MODE %q: use monolith or microservice", mode)
+		}
+	}
+
+	// Then check USE_ORDER_MICROSERVICE for backward compatibility with older env files
+	if raw := strings.TrimSpace(os.Getenv("USE_ORDER_MICROSERVICE")); raw != "" {
+		enabled, err := strconv.ParseBool(raw)
+		if err != nil {
+			return orderServiceRuntimeConfig{}, fmt.Errorf("parse USE_ORDER_MICROSERVICE: %w", err)
+		}
+		cfg.UseMicroservice = enabled
+	}
+
+	// If microservice mode is enabled, GRPCAddress must be set
+	if cfg.UseMicroservice && cfg.GRPCAddress == "" {
+		return orderServiceRuntimeConfig{}, errors.New("ORDER_SERVICE_GRPC_ADDR is required when the order microservice is enabled")
+	}
+
+	// If microservice mode is disabled, GRPCAddress is ignored but we can log it if set
+	return cfg, nil
+}
 
 func initRedisClient() (*redis.Client, error) {
 	// Get Redis host address
@@ -234,6 +277,31 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 
 	orderRepo := repository.NewOrderRepo(dbpool)
 	orderService := order_service.NewOrderServiceWithNotification(txm, orderRepo, cartRepo, userRepo, notificationService)
+	
+	// Load order config from env variables to determine whether to use microservice or monolith implementation
+	orderConfig, err := loadOrderServiceRuntimeConfig()
+	if err != nil {
+		return nil, fmt.Errorf("load order service config: %w", err)
+	}
+
+	// If microservice mode is enabled,
+	// wrap the monolith order service with a gRPC client that forwards calls to the microservice
+	if orderConfig.UseMicroservice {
+		orderService, err = order_service.NewRemoteOrderService(
+			orderConfig.GRPCAddress,
+			orderService,
+			cartRepo,
+			bookRepo,
+			userRepo,
+			notificationService,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("init remote order service: %w", err)
+		}
+		slog.Info("using order microservice", "addr", orderConfig.GRPCAddress)
+	} else {
+		slog.Info("using monolith order service")
+	}
 	orderController := controller.NewOrderController(orderService)
 
 	reviewRepo := repository.NewReviewRepository(gormdb)
