@@ -21,10 +21,13 @@ type grpcOrderClient interface {
 	GetOrder(ctx context.Context, in *orderv1.GetOrderRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error)
 	ListOrders(ctx context.Context, in *orderv1.ListOrdersRequest, opts ...grpc.CallOption) (*orderv1.ListOrdersResponse, error)
 	ConfirmPayment(ctx context.Context, in *orderv1.ConfirmPaymentRequest, opts ...grpc.CallOption) (*orderv1.ConfirmPaymentResponse, error)
+	CancelOrder(ctx context.Context, in *orderv1.CancelOrderRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error)
+	AdminUpdateOrderStatus(ctx context.Context, in *orderv1.AdminUpdateOrderStatusRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error)
+	ListAllOrders(ctx context.Context, in *orderv1.ListAllOrdersRequest, opts ...grpc.CallOption) (*orderv1.ListAllOrdersResponse, error)
 }
 
-// remoteOrderService keeps order creation/payment on the remote gRPC service,
-// while still depending on local repositories for enrichment and transitional fallbacks.
+// remoteOrderService keeps order lifecycle ownership on the remote gRPC service,
+// while still depending on local repositories for enrichment and side effects.
 type remoteOrderService struct {
 	client       grpcOrderClient
 	conn         *grpc.ClientConn
@@ -126,6 +129,7 @@ func (s *remoteOrderService) Checkout(
 		return domain.OrderView{}, mapRemoteError("create order", err)
 	}
 
+	slog.Info("forwarded checkout to order microservice", "userID", userID.String(), "orderID", resp.GetOrderId())
 	return s.fetchOrderView(ctx, resp.GetOrderId())
 }
 
@@ -143,6 +147,7 @@ func (s *remoteOrderService) ConfirmPayment(
 		return domain.OrderView{}, mapRemoteError("confirm payment", err)
 	}
 
+	slog.Info("forwarded payment confirmation to order microservice", "userID", userID.String(), "orderID", input.OrderID.String(), "success", input.Success)
 	orderView, err := s.fetchOrderView(ctx, input.OrderID.String())
 	if err != nil {
 		return domain.OrderView{}, err
@@ -163,16 +168,39 @@ func (s *remoteOrderService) CancelOrder(
 	userID uuid.UUID,
 	input domain.OrderCancelInput,
 ) (domain.OrderView, error) {
-	slog.Info("order cancellation is using the monolith fallback because the order microservice does not expose this RPC yet")
-	return s.fallback.CancelOrder(ctx, userID, input)
+	resp, err := s.client.CancelOrder(ctx, &orderv1.CancelOrderRequest{
+		UserId:             userID.String(),
+		OrderId:            input.OrderID.String(),
+		CancellationReason: input.CancellationReason,
+	})
+	if err != nil {
+		return domain.OrderView{}, mapRemoteError("cancel order", err)
+	}
+
+	slog.Info("forwarded order cancellation to order microservice", "userID", userID.String(), "orderID", input.OrderID.String())
+	return s.mapOrderView(ctx, resp), nil
 }
 
 func (s *remoteOrderService) AdminUpdateOrderStatus(
 	ctx context.Context,
 	input domain.AdminOrderStatusUpdateInput,
 ) (domain.OrderView, error) {
-	slog.Info("admin order updates are using the monolith fallback because the order microservice does not expose this RPC yet")
-	return s.fallback.AdminUpdateOrderStatus(ctx, input)
+	req := &orderv1.AdminUpdateOrderStatusRequest{
+		OrderId:            input.OrderID.String(),
+		Status:             string(input.Status),
+		CancellationReason: input.CancellationReason,
+	}
+	if input.PaymentStatus != nil {
+		req.PaymentStatus = string(*input.PaymentStatus)
+	}
+
+	resp, err := s.client.AdminUpdateOrderStatus(ctx, req)
+	if err != nil {
+		return domain.OrderView{}, mapRemoteError("admin update order status", err)
+	}
+
+	slog.Info("forwarded admin order update to order microservice", "orderID", input.OrderID.String())
+	return s.mapOrderView(ctx, resp), nil
 }
 
 func (s *remoteOrderService) ListUserOrders(
@@ -201,8 +229,21 @@ func (s *remoteOrderService) ListAllOrders(
 	ctx context.Context,
 	limit, offset int,
 ) ([]domain.OrderView, error) {
-	slog.Info("admin order listing is using the monolith fallback because the order microservice does not expose this RPC yet")
-	return s.fallback.ListAllOrders(ctx, limit, offset)
+	resp, err := s.client.ListAllOrders(ctx, &orderv1.ListAllOrdersRequest{
+		Limit:  int32(limit),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		return nil, mapRemoteError("list all orders", err)
+	}
+
+	orders := make([]domain.OrderView, 0, len(resp.GetOrders()))
+	for _, order := range resp.GetOrders() {
+		orders = append(orders, s.mapOrderView(ctx, order))
+	}
+
+	slog.Info("listed all orders via order microservice", "limit", limit, "offset", offset, "count", len(orders))
+	return orders, nil
 }
 
 func (s *remoteOrderService) fetchOrderView(ctx context.Context, orderID string) (domain.OrderView, error) {
@@ -221,12 +262,14 @@ func (s *remoteOrderService) mapOrderView(ctx context.Context, resp *orderv1.Get
 	userID, _ := uuid.Parse(resp.GetUserId())
 
 	order := domain.Order{
-		ID:            orderID,
-		OrderNumber:   resp.GetOrderNumber(),
-		TotalPrice:    resp.GetTotalPrice(),
-		UserID:        userID,
-		PaymentStatus: parsePaymentStatusPtr(resp.GetPaymentStatus()),
-		Status:        parseOrderStatus(resp.GetStatus()),
+		ID:                 orderID,
+		OrderNumber:        resp.GetOrderNumber(),
+		TotalPrice:         resp.GetTotalPrice(),
+		UserID:             userID,
+		PaymentMethod:      parsePaymentMethodPtr(resp.GetPaymentMethod()),
+		PaymentStatus:      parsePaymentStatusPtr(resp.GetPaymentStatus()),
+		Status:             parseOrderStatus(resp.GetStatus()),
+		CancellationReason: parseOptionalString(resp.GetCancellationReason()),
 	}
 
 	items := make([]domain.OrderItemDetail, 0, len(resp.GetItems()))
@@ -256,6 +299,15 @@ func (s *remoteOrderService) mapOrderView(ctx context.Context, resp *orderv1.Get
 		Order: order,
 		Items: items,
 	}
+}
+
+func parseOptionalString(raw string) *string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+
+	return &trimmed
 }
 
 func (s *remoteOrderService) clearCartBestEffort(ctx context.Context, userID uuid.UUID) {
@@ -333,6 +385,28 @@ func parsePaymentStatusPtr(raw string) *domain.PaymentStatus {
 	case string(domain.PaymentFailed):
 		status := domain.PaymentFailed
 		return &status
+	default:
+		return nil
+	}
+}
+
+func parsePaymentMethodPtr(raw string) *domain.PaymentMethod {
+	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case string(domain.PaymentCOD):
+		method := domain.PaymentCOD
+		return &method
+	case string(domain.PaymentCreditCard):
+		method := domain.PaymentCreditCard
+		return &method
+	case string(domain.PaymentDebitCard):
+		method := domain.PaymentDebitCard
+		return &method
+	case string(domain.PaymentNetBanking):
+		method := domain.PaymentNetBanking
+		return &method
+	case string(domain.PaymentUPI):
+		method := domain.PaymentUPI
+		return &method
 	default:
 		return nil
 	}

@@ -17,6 +17,9 @@ type mockRemoteOrderClient struct {
 	getOrderFunc       func(ctx context.Context, in *orderv1.GetOrderRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error)
 	listOrdersFunc     func(ctx context.Context, in *orderv1.ListOrdersRequest, opts ...grpc.CallOption) (*orderv1.ListOrdersResponse, error)
 	confirmPaymentFunc func(ctx context.Context, in *orderv1.ConfirmPaymentRequest, opts ...grpc.CallOption) (*orderv1.ConfirmPaymentResponse, error)
+	cancelOrderFunc    func(ctx context.Context, in *orderv1.CancelOrderRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error)
+	adminUpdateFunc    func(ctx context.Context, in *orderv1.AdminUpdateOrderStatusRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error)
+	listAllOrdersFunc  func(ctx context.Context, in *orderv1.ListAllOrdersRequest, opts ...grpc.CallOption) (*orderv1.ListAllOrdersResponse, error)
 }
 
 func (m *mockRemoteOrderClient) CreateOrder(ctx context.Context, in *orderv1.CreateOrderRequest, opts ...grpc.CallOption) (*orderv1.CreateOrderResponse, error) {
@@ -43,6 +46,27 @@ func (m *mockRemoteOrderClient) ListOrders(ctx context.Context, in *orderv1.List
 func (m *mockRemoteOrderClient) ConfirmPayment(ctx context.Context, in *orderv1.ConfirmPaymentRequest, opts ...grpc.CallOption) (*orderv1.ConfirmPaymentResponse, error) {
 	if m.confirmPaymentFunc != nil {
 		return m.confirmPaymentFunc(ctx, in, opts...)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockRemoteOrderClient) CancelOrder(ctx context.Context, in *orderv1.CancelOrderRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error) {
+	if m.cancelOrderFunc != nil {
+		return m.cancelOrderFunc(ctx, in, opts...)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockRemoteOrderClient) AdminUpdateOrderStatus(ctx context.Context, in *orderv1.AdminUpdateOrderStatusRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error) {
+	if m.adminUpdateFunc != nil {
+		return m.adminUpdateFunc(ctx, in, opts...)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockRemoteOrderClient) ListAllOrders(ctx context.Context, in *orderv1.ListAllOrdersRequest, opts ...grpc.CallOption) (*orderv1.ListAllOrdersResponse, error) {
+	if m.listAllOrdersFunc != nil {
+		return m.listAllOrdersFunc(ctx, in, opts...)
 	}
 	return nil, errors.New("not implemented")
 }
@@ -217,33 +241,122 @@ func TestRemoteOrderServiceConfirmPaymentClearsCart(t *testing.T) {
 	}
 }
 
-func TestRemoteOrderServiceCancelFallsBackToMonolith(t *testing.T) {
+func TestRemoteOrderServiceCancelUsesRemoteClient(t *testing.T) {
 	userID := uuid.New()
 	orderID := uuid.New()
-	called := false
+	cancellationReason := "customer request"
 
-	fallback := &mockFallbackOrderService{
-		cancelOrderFunc: func(ctx context.Context, uid uuid.UUID, input domain.OrderCancelInput) (domain.OrderView, error) {
-			called = true
-			if uid != userID {
-				t.Fatalf("expected user id %s, got %s", userID, uid)
+	svc := newRemoteOrderServiceForTest(&mockRemoteOrderClient{
+		cancelOrderFunc: func(ctx context.Context, in *orderv1.CancelOrderRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error) {
+			if in.GetUserId() != userID.String() {
+				t.Fatalf("expected user id %s, got %s", userID, in.GetUserId())
 			}
-			if input.OrderID != orderID {
-				t.Fatalf("expected order id %s, got %s", orderID, input.OrderID)
+			if in.GetOrderId() != orderID.String() {
+				t.Fatalf("expected order id %s, got %s", orderID, in.GetOrderId())
 			}
-			return domain.OrderView{}, nil
+			if in.GetCancellationReason() != cancellationReason {
+				t.Fatalf("expected cancellation reason %q, got %q", cancellationReason, in.GetCancellationReason())
+			}
+			return &orderv1.GetOrderResponse{
+				OrderId:            orderID.String(),
+				OrderNumber:        "BN-3",
+				UserId:             userID.String(),
+				PaymentStatus:      string(domain.PaymentRefundInitiated),
+				Status:             string(domain.OrderCancelled),
+				CancellationReason: cancellationReason,
+			}, nil
 		},
-	}
+	}, &panicFallbackOrderService{}, &noopCartRepository{}, nil, nil, nil)
 
-	svc := newRemoteOrderServiceForTest(&mockRemoteOrderClient{}, fallback, &noopCartRepository{}, nil, nil, nil)
-	_, err := svc.CancelOrder(context.Background(), userID, domain.OrderCancelInput{
+	order, err := svc.CancelOrder(context.Background(), userID, domain.OrderCancelInput{
 		OrderID:            orderID,
-		CancellationReason: "customer request",
+		CancellationReason: cancellationReason,
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if !called {
-		t.Fatal("expected monolith fallback to be called")
+	if order.Order.Status != domain.OrderCancelled {
+		t.Fatalf("expected cancelled status, got %s", order.Order.Status)
+	}
+	if order.Order.CancellationReason == nil || *order.Order.CancellationReason != cancellationReason {
+		t.Fatalf("expected cancellation reason %q, got %+v", cancellationReason, order.Order.CancellationReason)
+	}
+}
+
+func TestRemoteOrderServiceAdminUpdateUsesRemoteClient(t *testing.T) {
+	orderID := uuid.New()
+	paymentStatus := domain.PaymentRefunded
+	cancellationReason := "out of stock"
+
+	svc := newRemoteOrderServiceForTest(&mockRemoteOrderClient{
+		adminUpdateFunc: func(ctx context.Context, in *orderv1.AdminUpdateOrderStatusRequest, opts ...grpc.CallOption) (*orderv1.GetOrderResponse, error) {
+			if in.GetOrderId() != orderID.String() {
+				t.Fatalf("expected order id %s, got %s", orderID, in.GetOrderId())
+			}
+			if in.GetStatus() != string(domain.OrderCancelled) {
+				t.Fatalf("expected status %s, got %s", domain.OrderCancelled, in.GetStatus())
+			}
+			if in.GetPaymentStatus() != string(paymentStatus) {
+				t.Fatalf("expected payment status %s, got %s", paymentStatus, in.GetPaymentStatus())
+			}
+			if in.GetCancellationReason() != cancellationReason {
+				t.Fatalf("expected cancellation reason %q, got %q", cancellationReason, in.GetCancellationReason())
+			}
+			return &orderv1.GetOrderResponse{
+				OrderId:            orderID.String(),
+				OrderNumber:        "BN-4",
+				PaymentStatus:      string(paymentStatus),
+				Status:             string(domain.OrderCancelled),
+				CancellationReason: cancellationReason,
+			}, nil
+		},
+	}, &panicFallbackOrderService{}, &noopCartRepository{}, nil, nil, nil)
+
+	order, err := svc.AdminUpdateOrderStatus(context.Background(), domain.AdminOrderStatusUpdateInput{
+		OrderID:            orderID,
+		Status:             domain.OrderCancelled,
+		PaymentStatus:      &paymentStatus,
+		CancellationReason: cancellationReason,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if order.Order.PaymentStatus == nil || *order.Order.PaymentStatus != paymentStatus {
+		t.Fatalf("expected payment status %s, got %+v", paymentStatus, order.Order.PaymentStatus)
+	}
+}
+
+func TestRemoteOrderServiceListAllUsesRemoteClient(t *testing.T) {
+	orderID := uuid.New()
+
+	svc := newRemoteOrderServiceForTest(&mockRemoteOrderClient{
+		listAllOrdersFunc: func(ctx context.Context, in *orderv1.ListAllOrdersRequest, opts ...grpc.CallOption) (*orderv1.ListAllOrdersResponse, error) {
+			if in.GetLimit() != 25 {
+				t.Fatalf("expected limit 25, got %d", in.GetLimit())
+			}
+			if in.GetOffset() != 10 {
+				t.Fatalf("expected offset 10, got %d", in.GetOffset())
+			}
+			return &orderv1.ListAllOrdersResponse{
+				Orders: []*orderv1.GetOrderResponse{{
+					OrderId:       orderID.String(),
+					OrderNumber:   "BN-5",
+					PaymentStatus: string(domain.PaymentPending),
+					Status:        string(domain.OrderPending),
+					PaymentMethod: string(domain.PaymentUPI),
+				}},
+			}, nil
+		},
+	}, &panicFallbackOrderService{}, &noopCartRepository{}, nil, nil, nil)
+
+	orders, err := svc.ListAllOrders(context.Background(), 25, 10)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("expected 1 order, got %d", len(orders))
+	}
+	if orders[0].Order.PaymentMethod == nil || *orders[0].Order.PaymentMethod != domain.PaymentUPI {
+		t.Fatalf("expected payment method %s, got %+v", domain.PaymentUPI, orders[0].Order.PaymentMethod)
 	}
 }

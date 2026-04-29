@@ -86,7 +86,7 @@ Notes:
 - `godotenv.Load()` is required during startup, so `.env` needs to exist locally.
 - If `REDIS_ADDR` is empty, the app falls back to an in-memory login rate limiter.
 - Local CORS currently allows `http://localhost:3000` and `http://localhost:5173`.
-- Order routing defaults to the monolith. When microservice mode is enabled, checkout, confirm payment, and user order listing use gRPC; cancel/admin order endpoints still fall back to the monolith until matching RPCs exist.
+- Order routing defaults to the monolith. When microservice mode is enabled, all order lifecycle reads and mutations use gRPC against `BookNest-OrderService`.
 
 ## Local setup
 
@@ -109,6 +109,15 @@ go run .
 ```
 
 The service starts on `http://localhost:8080`.
+
+## Demo the order microservice path
+
+1. Start the order service infrastructure from `BookNest-OrderService`.
+2. Run the order service gRPC server on `localhost:50051`.
+3. Set `ORDER_SERVICE_MODE=microservice` or `USE_ORDER_MICROSERVICE=true`.
+4. Start this API.
+5. Call `POST /api/v1/orders/checkout` and confirm the platform logs that it forwarded the request over gRPC.
+6. Verify the order service logs the inbound RPC and publishes `order.created`.
 
 Useful endpoints:
 
