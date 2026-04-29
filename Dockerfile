@@ -4,6 +4,9 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
+# The main module uses a local replace, so the replacement module must exist
+# before `go mod download` runs inside the image.
+COPY third_party/booknest-order-service ./third_party/booknest-order-service
 RUN go mod download
 
 COPY . .
