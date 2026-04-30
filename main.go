@@ -58,9 +58,8 @@ func main() {
 	configureSwagger()
 
 	// Load the .env file
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Cannot load the env file", "err", err)
+	if err := godotenv.Load(".env"); err != nil {
+		log.Println(".env not found, using system environment variables")
 	}
 
 	// connect to database
