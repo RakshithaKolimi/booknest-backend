@@ -28,7 +28,7 @@ COPY entrypoint.sh .
 
 # Install migrate
 RUN apk add --no-cache curl ca-certificates tar file \
- && curl -fL https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-arm64.tar.gz \
+ && curl -fL https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-ard64.tar.gz \
     -o /tmp/migrate.tar.gz \
  && tar -xzf /tmp/migrate.tar.gz -C /tmp \
  && mv /tmp/migrate /usr/local/bin/migrate \
