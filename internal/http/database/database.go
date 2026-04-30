@@ -25,7 +25,7 @@ func Connect() (*pgxpool.Pool, error) {
 	// Get dsn for postgres connection
 	dsn := os.Getenv("DB_URL")
 
-	if dsn != "" {
+	if dsn == "" {
 		// You can load these from environment variables or .env file
 		host := os.Getenv("DB_HOST")
 		user := os.Getenv("DB_USER")
@@ -75,7 +75,7 @@ func ConnectGORM() (*gorm.DB, error) {
 	dsn := os.Getenv("DB_URL")
 
 	// You can load these from environment variables or .env file
-	if dsn != "" {
+	if dsn == "" {
 		host := os.Getenv("DB_HOST")
 		user := os.Getenv("DB_USER")
 		password := os.Getenv("DB_PASSWORD")
@@ -91,7 +91,7 @@ func ConnectGORM() (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info), // change to Silent in prod
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect database: %w", err)
 	}
