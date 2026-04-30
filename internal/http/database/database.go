@@ -15,25 +15,30 @@ import (
 
 var (
 	// allows test to inject mock behavior
-	newPgxPool = pgxpool.NewWithConfig
+	newPgxPool  = pgxpool.NewWithConfig
 	pingPgxPool = func(ctx context.Context, pool *pgxpool.Pool) error {
 		return pool.Ping(ctx)
 	}
 )
 
 func Connect() (*pgxpool.Pool, error) {
-	// You can load these from environment variables or .env file
-	host := os.Getenv("DB_HOST")
-	user := os.Getenv("DB_USER")
-	password := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
-	port := os.Getenv("DB_PORT")
+	// Get dsn for postgres connection
+	dsn := os.Getenv("DB_URL")
 
-	// Build DSN (Data source name)
-	dsn := fmt.Sprintf(
-		"postgresql://%s:%s@%s:%s/%s?sslmode=disable&timezone=Asia/Kolkata",
-		user, password, host, port, dbName,
-	)
+	if dsn != "" {
+		// You can load these from environment variables or .env file
+		host := os.Getenv("DB_HOST")
+		user := os.Getenv("DB_USER")
+		password := os.Getenv("DB_PASSWORD")
+		dbName := os.Getenv("DB_NAME")
+		port := os.Getenv("DB_PORT")
+
+		// Build DSN (Data source name)
+		dsn = fmt.Sprintf(
+			"postgresql://%s:%s@%s:%s/%s?sslmode=disable&timezone=Asia/Kolkata",
+			user, password, host, port, dbName,
+		)
+	}
 
 	// Create config
 	config, err := pgxpool.ParseConfig(dsn)
