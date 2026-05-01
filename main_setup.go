@@ -312,8 +312,9 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 
 	r := gin.Default()
 	r.Use(useCORSMiddleware(map[string]bool{
-		"http://localhost:3000": true,
-		"http://localhost:5173": true,
+		"http://localhost:3000":               true,
+		"http://localhost:5173":               true,
+		"https://booknest-web-web.vercel.app": true,
 	}))
 	r.Use(middleware.SecurityHeaders())
 	r.Use(gin.Recovery())

@@ -7,6 +7,10 @@ MIGRATE=migrate -path $(MIGRATIONS_DIR) -database $(DB_URL)
 
 
 # Commands
+.PHONY: run
+run:
+	go run .
+
 migrate-up:
 	echo "Running migrations..."
 	$(MIGRATE) up
@@ -28,4 +32,3 @@ migrate-new:
 
 doc:
 	swag init --parseDependency --parseInternal
-

@@ -105,7 +105,7 @@ If you recently pulled new changes, rerun `make migrate-up` before starting the 
 ## Run the API
 
 ```bash
-go run .
+make run
 ```
 
 The service starts on `http://localhost:8080`.
