@@ -61,6 +61,9 @@ REDIS_DB=0
 # Optional: overrides the host shown in Swagger docs
 API_HOST=localhost:8080
 
+# Frontend URL used for CORS and auth email links
+BOOKNEST_WEB_URL=http://localhost:3000
+
 # Order service selection
 # Default behavior is the monolith order service.
 # Set either USE_ORDER_MICROSERVICE=true or ORDER_SERVICE_MODE=microservice
@@ -85,7 +88,8 @@ Notes:
 
 - `godotenv.Load()` is required during startup, so `.env` needs to exist locally.
 - If `REDIS_ADDR` is empty, the app falls back to an in-memory login rate limiter.
-- Local CORS currently allows `http://localhost:3000` and `http://localhost:5173`.
+- Local CORS allows `http://localhost:3000` and `http://localhost:5173`.
+- Set `BOOKNEST_WEB_URL` to the deployed frontend origin, such as `https://your-booknest-app.vercel.app`, so CORS and auth email links use the correct frontend URL. `FRONTEND_URL` is also supported for backward compatibility.
 - Order routing defaults to the monolith. When microservice mode is enabled, all order lifecycle reads and mutations use gRPC against `BookNest-OrderService`.
 
 ## Local setup

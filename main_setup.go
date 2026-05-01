@@ -149,6 +149,22 @@ func useCORSMiddleware(allowedOrigins map[string]bool) gin.HandlerFunc {
 	}
 }
 
+func frontendAllowedOrigins() map[string]bool {
+	allowedOrigins := map[string]bool{
+		"http://localhost:3000": true,
+		"http://localhost:5173": true,
+	}
+
+	for _, envName := range []string{"BOOKNEST_WEB_URL", "FRONTEND_URL"} {
+		origin := strings.TrimRight(strings.TrimSpace(os.Getenv(envName)), "/")
+		if origin != "" {
+			allowedOrigins[origin] = true
+		}
+	}
+
+	return allowedOrigins
+}
+
 func initNotificationService(
 	ctx context.Context,
 	notificationRepo domain.NotificationRepository,
@@ -311,11 +327,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	reviewController := controller.NewReviewController(reviewService)
 
 	r := gin.Default()
-	r.Use(useCORSMiddleware(map[string]bool{
-		"http://localhost:3000":               true,
-		"http://localhost:5173":               true,
-		"https://booknest-web-web.vercel.app": true,
-	}))
+	r.Use(useCORSMiddleware(frontendAllowedOrigins()))
 	r.Use(middleware.SecurityHeaders())
 	r.Use(gin.Recovery())
 	r.Use(middleware.RateLimitMiddleware())

@@ -172,6 +172,20 @@ func TestUseCORSMiddleware_DisallowedOrigin(t *testing.T) {
 	}
 }
 
+func TestFrontendAllowedOrigins_IncludesConfiguredFrontendURL(t *testing.T) {
+	t.Setenv("BOOKNEST_WEB_URL", "https://booknest.example.com/")
+	t.Setenv("FRONTEND_URL", "")
+
+	allowedOrigins := frontendAllowedOrigins()
+
+	if !allowedOrigins["https://booknest.example.com"] {
+		t.Fatal("expected configured frontend URL to be allowed")
+	}
+	if !allowedOrigins["http://localhost:3000"] {
+		t.Fatal("expected local frontend URL to remain allowed")
+	}
+}
+
 func TestInitRedisClient(t *testing.T) {
 	t.Run("returns nil when redis addr is empty", func(t *testing.T) {
 		t.Setenv("REDIS_ADDR", "")

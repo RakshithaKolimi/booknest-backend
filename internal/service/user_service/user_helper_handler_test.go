@@ -3,6 +3,7 @@ package user_service
 import (
 	"context"
 	"errors"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -338,6 +339,81 @@ func TestSendMobileVerification_UsesNotificationService(t *testing.T) {
 
 	if !called {
 		t.Fatalf("expected SendOTP to be called")
+	}
+}
+
+func TestSendEmailVerification_UsesConfiguredFrontendURL(t *testing.T) {
+	t.Setenv("BOOKNEST_WEB_URL", "https://booknest.example.com/")
+	t.Setenv("FRONTEND_URL", "")
+
+	called := false
+	service := &userService{
+		notification: &MockNotificationService{
+			SendVerificationEmailFunc: func(email string, link string) error {
+				called = true
+				if email != "user@example.com" {
+					t.Fatalf("unexpected email: %s", email)
+				}
+
+				parsed, err := url.Parse(link)
+				if err != nil {
+					t.Fatalf("expected valid verification link, got %v", err)
+				}
+				if got := parsed.Scheme + "://" + parsed.Host; got != "https://booknest.example.com" {
+					t.Fatalf("expected configured frontend origin, got %s", got)
+				}
+				if parsed.Path != "/verify-email" {
+					t.Fatalf("expected verify-email path, got %s", parsed.Path)
+				}
+				if got := parsed.Query().Get("token"); got != "raw-token" {
+					t.Fatalf("expected token query param, got %s", got)
+				}
+				if got := parsed.Query().Get("email"); got != "user@example.com" {
+					t.Fatalf("expected email query param, got %s", got)
+				}
+				return nil
+			},
+		},
+	}
+
+	service.sendEmailVerification("user@example.com", "raw-token")
+
+	if !called {
+		t.Fatalf("expected SendVerificationEmail to be called")
+	}
+}
+
+func TestSendPasswordResetEmail_UsesConfiguredFrontendURL(t *testing.T) {
+	t.Setenv("BOOKNEST_WEB_URL", "https://booknest.example.com")
+	t.Setenv("FRONTEND_URL", "")
+
+	called := false
+	service := &userService{
+		notification: &MockNotificationService{
+			SendPasswordResetFunc: func(email string, link string) error {
+				called = true
+				parsed, err := url.Parse(link)
+				if err != nil {
+					t.Fatalf("expected valid reset link, got %v", err)
+				}
+				if got := parsed.Scheme + "://" + parsed.Host; got != "https://booknest.example.com" {
+					t.Fatalf("expected configured frontend origin, got %s", got)
+				}
+				if parsed.Path != "/reset-password" {
+					t.Fatalf("expected reset-password path, got %s", parsed.Path)
+				}
+				if parsed.Query().Get("token") != "reset-token" || parsed.Query().Get("email") != "user@example.com" {
+					t.Fatalf("unexpected reset link query: %s", parsed.RawQuery)
+				}
+				return nil
+			},
+		},
+	}
+
+	service.sendPasswordResetEmail("user@example.com", "reset-token")
+
+	if !called {
+		t.Fatalf("expected SendPasswordReset to be called")
 	}
 }
 
