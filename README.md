@@ -39,6 +39,8 @@ Go backend for the BookNest bookstore platform. The service uses Gin for HTTP ro
 Create a local `.env` file in this directory. Use your own secrets; do not commit real credentials.
 
 ```env
+ENV=development
+
 DB_HOST=localhost
 DB_USER=postgres
 DB_PASSWORD=booknest

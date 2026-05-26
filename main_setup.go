@@ -104,12 +104,17 @@ func initRedisClient() (*redis.Client, error) {
 		db = parsed
 	}
 
+	var tlsConfig *tls.Config
+
+	if os.Getenv("ENV") == "production" {
+		tlsConfig = &tls.Config{}
+	}
 	// Get a new client
 	client := redis.NewClient(&redis.Options{
 		Addr:      addr,
 		Password:  os.Getenv("REDIS_PASSWORD"),
 		DB:        db,
-		TLSConfig: &tls.Config{},
+		TLSConfig: tlsConfig,
 	})
 
 	// Ping the redis DB
