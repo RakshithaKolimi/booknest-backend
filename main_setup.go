@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
@@ -105,9 +106,10 @@ func initRedisClient() (*redis.Client, error) {
 
 	// Get a new client
 	client := redis.NewClient(&redis.Options{
-		Addr:     addr,
-		Password: os.Getenv("REDIS_PASSWORD"),
-		DB:       db,
+		Addr:      addr,
+		Password:  os.Getenv("REDIS_PASSWORD"),
+		DB:        db,
+		TLSConfig: &tls.Config{},
 	})
 
 	// Ping the redis DB
