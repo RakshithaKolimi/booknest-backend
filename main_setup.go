@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
@@ -106,10 +105,9 @@ func initRedisClient() (*redis.Client, error) {
 
 	// Get a new client
 	client := redis.NewClient(&redis.Options{
-		Addr:      addr,
-		Password:  os.Getenv("REDIS_PASSWORD"),
-		DB:        db,
-		TLSConfig: &tls.Config{},
+		Addr:     addr,
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       db,
 	})
 
 	// Ping the redis DB
@@ -325,6 +323,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	reviewRepo := repository.NewReviewRepository(gormdb)
 	reviewService := review_service.NewReviewService(reviewRepo, orderRepo)
 	reviewController := controller.NewReviewController(reviewService)
+	imageController := controller.NewImageController()
 
 	r := gin.Default()
 	r.Use(useCORSMiddleware(frontendAllowedOrigins()))
@@ -356,6 +355,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 		cartController,
 		orderController,
 		reviewController,
+		imageController,
 	)
 
 	// Mount only v1 now; v2 can be plugged in with another registrar later.

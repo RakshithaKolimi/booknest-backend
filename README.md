@@ -10,6 +10,7 @@ Go backend for the BookNest bookstore platform. The service uses Gin for HTTP ro
 - Cart and checkout flows
 - User and admin order views
 - Book reviews with purchase-based eligibility checks
+- Admin book-cover image uploads backed by S3
 - Swagger UI protected by basic auth
 
 ## Project structure
@@ -20,6 +21,7 @@ Go backend for the BookNest bookstore platform. The service uses Gin for HTTP ro
 - `internal/http/controller`: HTTP handlers and route registration
 - `internal/service`: business logic
 - `internal/repository`: PostgreSQL/GORM data access
+- `internal/pkg/storage`: S3-backed image upload helpers
 - `internal/http/database/migrations`: SQL migrations
 - `internal/middleware`: auth, rate limiting, logging, error handling
 - `docs`: generated Swagger assets
@@ -78,10 +80,11 @@ SES_SECRET_KEY=
 SES_REGION=ap-south-1
 EMAIL_FROM=
 
-# MObile SNS 
+# AWS configuration for SNS and S3 book cover uploads
+AWS_REGION=ap-south-1
+AWS_BUCKET_NAME=booknest-images-prod
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
-AWS_REGION=ap-south-1
 ```
 
 Notes:
@@ -91,6 +94,7 @@ Notes:
 - Local CORS allows `http://localhost:3000` and `http://localhost:5173`.
 - Set `BOOKNEST_WEB_URL` to the deployed frontend origin, such as `https://your-booknest-app.vercel.app`, so CORS and auth email links use the correct frontend URL. `FRONTEND_URL` is also supported for backward compatibility.
 - Order routing defaults to the monolith. When microservice mode is enabled, all order lifecycle reads and mutations use gRPC against `BookNest-OrderService`.
+- Book cover uploads require `AWS_REGION`, `AWS_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`. The AWS user must be allowed to write objects to the configured S3 bucket.
 
 ## Local setup
 
@@ -150,6 +154,7 @@ The current frontend expects these routes under `/api/v1`:
 - Cart: `/cart`, `/cart/items`, `/cart/items/:book_id`, `/cart/clear`
 - Orders: `/orders`, `/orders/checkout`, `/orders/confirm`, `/admin/orders`
 - Catalog admin: `/authors`, `/categories`, `/publishers`
+- Images: `/images/upload`
 
 Review rules:
 
@@ -158,6 +163,12 @@ Review rules:
 - Only users with a completed purchase of the given book can create or update a review.
 
 There is also a legacy `/refresh` fallback handled by the frontend for older environments, but the current backend route is `/auth/refresh`.
+
+Image upload rules:
+
+- `POST /images/upload` accepts multipart form data with an `image` file field.
+- The route requires an admin JWT and returns `{ "url": "..." }` for the uploaded S3 object.
+- Use the returned URL as the `image_url` value when creating or updating a book.
 
 ## Swagger
 

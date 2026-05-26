@@ -1801,6 +1801,55 @@ paths:
       summary: Remove item from cart
       tags:
       - Cart
+  /images/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Uploads a book cover image to S3 and returns the public URL
+      parameters:
+      - description: Image file
+        in: formData
+        name: image
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Upload book cover
+      tags:
+      - Images
   /orders:
     get:
       description: Lists orders for the authenticated user
