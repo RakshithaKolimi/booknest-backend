@@ -774,6 +774,18 @@ definitions:
     x-enum-varnames:
     - UserRoleUser
     - UserRoleAdmin
+  domain.AIChatRequest:
+    properties:
+      message:
+        type: string
+      prompt:
+        type: string
+    type: object
+  domain.AIChatResponse:
+    properties:
+      message:
+        type: string
+    type: object
   domain.OrderStatus:
     enum:
     - PENDING
@@ -883,6 +895,40 @@ paths:
       summary: Update order status
       tags:
       - Orders
+  /ai/chat:
+    post:
+      consumes:
+      - application/json
+      description: Sends a message to the configured AI provider
+      parameters:
+      - description: AI chat request
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/domain.AIChatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.AIChatResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Chat with AI
+      tags:
+      - AI
   /auth/forgot-password:
     post:
       consumes:

@@ -4,7 +4,9 @@ package routes
 // User Routes
 // ====================
 const (
-	HealthRoute = "/health"
+	HealthRoute   = "/health"
+	AIHealthRoute = "/ai/health"
+	AIChatRoute   = "/ai/chat"
 
 	BooksRoute       = "/books"
 	BookRoute        = "/book"

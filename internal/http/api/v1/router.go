@@ -19,6 +19,7 @@ type Router struct {
 	order     domain.OrderController
 	review    domain.ReviewController
 	image     domain.ImageController
+	ai        domain.AIController
 }
 
 func NewRouter(
@@ -31,6 +32,7 @@ func NewRouter(
 	order domain.OrderController,
 	review domain.ReviewController,
 	image domain.ImageController,
+	ai domain.AIController,
 ) *Router {
 	return &Router{
 		user:      user,
@@ -42,6 +44,7 @@ func NewRouter(
 		order:     order,
 		review:    review,
 		image:     image,
+		ai:        ai,
 	}
 }
 
@@ -59,4 +62,5 @@ func (r *Router) RegisterRoutes(group *gin.RouterGroup) {
 	r.order.RegisterRoutes(group)
 	r.review.RegisterRoutes(group)
 	r.image.RegisterRoutes(group)
+	r.ai.RegisterRoutes(group)
 }

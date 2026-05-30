@@ -42,6 +42,7 @@ func TestRegisterRouteHelpers(t *testing.T) {
 	RegisterOrderRoutes(engine, jwtConfig, &orderController{})
 	RegisterReviewRoutes(engine, jwtConfig, &reviewController{})
 	RegisterImageRoutes(engine, jwtConfig, &imageController{})
+	RegisterAIRoutes(engine, &aiController{})
 
 	expected := []struct {
 		method string
@@ -57,6 +58,7 @@ func TestRegisterRouteHelpers(t *testing.T) {
 		{method: "PUT", path: "/admin/orders/status"},
 		{method: "GET", path: "/books/:id/reviews"},
 		{method: "POST", path: "/images/upload"},
+		{method: "POST", path: "/ai/chat"},
 	}
 
 	for _, tc := range expected {
@@ -78,6 +80,7 @@ func TestControllerRegisterRoutesWrappers(t *testing.T) {
 	NewOrderController(&mockOrderServiceController{}).RegisterRoutes(engine)
 	NewReviewController(&mockReviewServiceController{}).RegisterRoutes(engine)
 	NewImageController().RegisterRoutes(engine)
+	NewAIController().RegisterRoutes(engine)
 
 	expected := []struct {
 		method string
@@ -90,6 +93,7 @@ func TestControllerRegisterRoutesWrappers(t *testing.T) {
 		{method: "GET", path: "/admin/orders"},
 		{method: "GET", path: "/books/:id/reviews"},
 		{method: "POST", path: "/images/upload"},
+		{method: "POST", path: "/ai/chat"},
 	}
 
 	for _, tc := range expected {

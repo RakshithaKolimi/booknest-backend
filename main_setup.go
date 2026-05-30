@@ -24,6 +24,7 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
+	aiprovider "booknest/internal/ai/provider"
 	"booknest/internal/domain"
 	"booknest/internal/http/api"
 	apiv1 "booknest/internal/http/api/v1"
@@ -32,6 +33,7 @@ import (
 	"booknest/internal/middleware"
 	"booknest/internal/pkg/util"
 	"booknest/internal/repository"
+	"booknest/internal/service/ai_service"
 	"booknest/internal/service/author_service"
 	"booknest/internal/service/book_service"
 	"booknest/internal/service/cart_service"
@@ -332,6 +334,14 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	reviewController := controller.NewReviewController(reviewService)
 	imageController := controller.NewImageController()
 
+	// Initialise AI provider, service, and controller
+	aiProvider, err := aiprovider.NewProviderFromEnv()
+	if err != nil {
+		slog.Warn("AI provider is not configured", "error", err)
+	}
+	aiService := ai_service.NewAIService(aiProvider)
+	aiController := controller.NewAIController(aiService)
+
 	r := gin.Default()
 	r.Use(useCORSMiddleware(frontendAllowedOrigins()))
 	r.Use(middleware.SecurityHeaders())
@@ -363,6 +373,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 		orderController,
 		reviewController,
 		imageController,
+		aiController,
 	)
 
 	// Mount only v1 now; v2 can be plugged in with another registrar later.

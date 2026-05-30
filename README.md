@@ -83,10 +83,14 @@ SES_REGION=ap-south-1
 EMAIL_FROM=
 
 # AWS configuration for SNS and S3 book cover uploads
-AWS_REGION=ap-south-1
 AWS_BUCKET_NAME=booknest-images-prod
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
+AWS_S3_ACCESS_KEY_ID=
+AWS_S3_SECRET_ACCESS_KEY=
+
+## AI
+AI_PROVIDER=openai
+OPENAI_API_KEY=
+OPENAI_CHAT_MODEL=gpt-5.4-nano
 ```
 
 Notes:
@@ -132,6 +136,7 @@ The service starts on `http://localhost:8080`.
 Useful endpoints:
 
 - Health check: `GET /health`
+- AI health check: `GET /api/v1/ai/health`
 - API base: `http://localhost:8080/api/v1`
 - Swagger UI: `http://localhost:8080/swagger/v1/index.html`
 
