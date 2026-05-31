@@ -22,6 +22,8 @@ type mockBookServiceController struct {
 	filterByCriteriaFun func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error)
 	queryBooksFunc      func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error)
 	updateBookFunc      func(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error)
+	generateSummaryFunc func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
+	generateCategories  func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
 	deleteBookFunc      func(ctx context.Context, id uuid.UUID) error
 }
 
@@ -58,6 +60,18 @@ func (m *mockBookServiceController) QueryBooks(ctx context.Context, filter domai
 func (m *mockBookServiceController) UpdateBook(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error) {
 	if m.updateBookFunc != nil {
 		return m.updateBookFunc(ctx, id, input)
+	}
+	return nil, errors.New("not implemented")
+}
+func (m *mockBookServiceController) GenerateSummary(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+	if m.generateSummaryFunc != nil {
+		return m.generateSummaryFunc(ctx, id)
+	}
+	return nil, errors.New("not implemented")
+}
+func (m *mockBookServiceController) GenerateCategories(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+	if m.generateCategories != nil {
+		return m.generateCategories(ctx, id)
 	}
 	return nil, errors.New("not implemented")
 }
@@ -246,6 +260,7 @@ func TestBookControllerDirectErrorPaths(t *testing.T) {
 		updateBookFunc: func(ctx context.Context, gotID uuid.UUID, input domain.BookInput) (*domain.Book, error) {
 			return nil, errors.New("boom")
 		},
+		generateSummaryFunc: func(ctx context.Context, gotID uuid.UUID) (*domain.Book, error) { return nil, errors.New("boom") },
 		deleteBookFunc: func(ctx context.Context, gotID uuid.UUID) error { return errors.New("boom") },
 	}
 	ctl := NewBookController(svc).(*bookController)
@@ -267,6 +282,8 @@ func TestBookControllerDirectErrorPaths(t *testing.T) {
 		{name: "filter error", method: ctl.filterBooks, body: `{}`, code: http.StatusInternalServerError},
 		{name: "update invalid id", method: ctl.updateBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad"}} }, code: http.StatusBadRequest},
 		{name: "update error", method: ctl.updateBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, body: `{"name":"Book","author_name":"Author","publisher_id":"` + uuid.New().String() + `"}`, code: http.StatusInternalServerError},
+		{name: "summary invalid id", method: ctl.generateSummary, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad"}} }, code: http.StatusBadRequest},
+		{name: "summary error", method: ctl.generateSummary, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusInternalServerError},
 		{name: "delete invalid id", method: ctl.deleteBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad"}} }, code: http.StatusBadRequest},
 		{name: "delete error", method: ctl.deleteBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusInternalServerError},
 	}

@@ -75,7 +75,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, e
 		Model:           p.model,
 		Input:           responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
 		Temperature:     openai.Float(0.7),
-		MaxOutputTokens: openai.Int(50),
+		MaxOutputTokens: openai.Int(200),
 	})
 	if err != nil {
 		return "", fmt.Errorf("send OpenAI request: %w", err)

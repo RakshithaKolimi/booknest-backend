@@ -1,13 +1,16 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"booknest/internal/domain"
+	"booknest/internal/service/ai_service"
 )
 
 type bookController struct {
@@ -52,6 +55,76 @@ func (c *bookController) createBook(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusCreated, book)
+}
+
+// generateSummary godoc
+// @Summary      Generate book summary
+// @Description  Generates and stores an AI summary for a book (admin only)
+// @Tags         Books
+// @Produce      json
+// @Param        id  path  string  true  "Book ID"
+// @Success      200  {object}  domain.Book
+// @Failure      400  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Failure      503  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /books/{id}/summary [post]
+func (c *bookController) generateSummary(ctx *gin.Context) {
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	book, err := c.service.GenerateSummary(ctx, id)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, ai_service.ErrProviderUnavailable) {
+			status = http.StatusServiceUnavailable
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
+			status = http.StatusNotFound
+		}
+		ctx.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, book)
+}
+
+// generateCategories godoc
+// @Summary      Generate book categories
+// @Description  Generates and stores AI categories for a book (admin only)
+// @Tags         Books
+// @Produce      json
+// @Param        id  path  string  true  "Book ID"
+// @Success      200  {object}  domain.Book
+// @Failure      400  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Failure      503  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /books/{id}/categories [post]
+func (c *bookController) generateCategories(ctx *gin.Context) {
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	book, err := c.service.GenerateCategories(ctx, id)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, ai_service.ErrProviderUnavailable) {
+			status = http.StatusServiceUnavailable
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
+			status = http.StatusNotFound
+		}
+		ctx.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, book)
 }
 
 // getBook godoc

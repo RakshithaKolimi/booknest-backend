@@ -51,6 +51,8 @@ func TestRegisterRouteHelpers(t *testing.T) {
 		{method: "GET", path: "/authors"},
 		{method: "PUT", path: "/authors/:id"},
 		{method: "GET", path: "/books/search"},
+		{method: "POST", path: "/books/:id/summary"},
+		{method: "POST", path: "/books/:id/categories"},
 		{method: "DELETE", path: "/books/:id"},
 		{method: "GET", path: "/categories"},
 		{method: "POST", path: "/cart/items"},
@@ -88,6 +90,8 @@ func TestControllerRegisterRoutesWrappers(t *testing.T) {
 	}{
 		{method: "GET", path: "/authors"},
 		{method: "GET", path: "/books"},
+		{method: "POST", path: "/books/:id/summary"},
+		{method: "POST", path: "/books/:id/categories"},
 		{method: "GET", path: "/cart"},
 		{method: "GET", path: "/categories"},
 		{method: "GET", path: "/admin/orders"},

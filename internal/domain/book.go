@@ -25,6 +25,7 @@ type Book struct {
 	ImageURL           *string    `json:"image_url,omitempty" example:"https://cdn.booknest.example/books/1984.jpg"`
 	IsActive           bool       `gorm:"default:false" json:"is_active" example:"true"`
 	Description        string     `gorm:"default:''" json:"description" example:"A dystopian novel set in a totalitarian society ruled by Big Brother."`
+	Summary            string     `gorm:"default:''" json:"summary" example:"A gripping dystopian classic about surveillance and control, following Winston Smith as he questions the Party's reality. Orwell's chilling vision explores truth, freedom, and resistance under totalitarian rule."`
 	ISBN               *string    `gorm:"uniqueIndex" json:"isbn,omitempty" example:"9780451524935"`
 	Price              float64    `gorm:"type:numeric(10,2)" json:"price" example:"499.99"`
 	DiscountPercentage float64    `gorm:"type:numeric(10,2);check:discount_percentage >= 0 AND discount_percentage <= 100" json:"discount_percentage" example:"10"`
@@ -97,6 +98,7 @@ type BookRepository interface {
 	QueryBooks(ctx context.Context, filter BookFilter, pagination QueryOptions) ([]Book, int64, *string, bool, error)
 	Update(ctx context.Context, book *Book) error
 	UpdateWithRelations(ctx context.Context, id uuid.UUID, input BookInput) (*Book, error)
+	ReplaceCategories(ctx context.Context, bookID uuid.UUID, categoryIDs []uuid.UUID) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
@@ -107,6 +109,8 @@ type BookService interface {
 	FilterByCriteria(ctx context.Context, filter BookFilter, q QueryOptions) (*BookSearchResult, error)
 	QueryBooks(ctx context.Context, filter BookFilter, q QueryOptions) (*BookSearchResult, error)
 	UpdateBook(ctx context.Context, id uuid.UUID, input BookInput) (*Book, error)
+	GenerateSummary(ctx context.Context, id uuid.UUID) (*Book, error)
+	GenerateCategories(ctx context.Context, id uuid.UUID) (*Book, error)
 	DeleteBook(ctx context.Context, id uuid.UUID) error
 }
 

@@ -82,6 +82,9 @@ func (m *mockBookRepository) Update(ctx context.Context, book *domain.Book) erro
 func (m *mockBookRepository) UpdateWithRelations(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error) {
 	return nil, nil
 }
+func (m *mockBookRepository) ReplaceCategories(ctx context.Context, bookID uuid.UUID, categoryIDs []uuid.UUID) error {
+	return nil
+}
 func (m *mockBookRepository) Delete(ctx context.Context, id uuid.UUID) error { return nil }
 func (m *mockBookRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
 	if m.findByIDFunc != nil {

@@ -16,7 +16,9 @@ type mockBookRepository struct {
 	listFunc                func(ctx context.Context, limit, offset int) ([]domain.Book, error)
 	filterByCriteriaFunc    func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, error)
 	queryBooksFunc          func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, *string, bool, error)
+	updateFunc              func(ctx context.Context, book *domain.Book) error
 	updateWithRelationsFunc func(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error)
+	replaceCategoriesFunc   func(ctx context.Context, bookID uuid.UUID, categoryIDs []uuid.UUID) error
 	deleteFunc              func(ctx context.Context, id uuid.UUID) error
 }
 
@@ -60,6 +62,9 @@ func (m *mockBookRepository) QueryBooks(ctx context.Context, filter domain.BookF
 }
 
 func (m *mockBookRepository) Update(ctx context.Context, book *domain.Book) error {
+	if m.updateFunc != nil {
+		return m.updateFunc(ctx, book)
+	}
 	return nil
 }
 
@@ -68,6 +73,13 @@ func (m *mockBookRepository) UpdateWithRelations(ctx context.Context, id uuid.UU
 		return m.updateWithRelationsFunc(ctx, id, input)
 	}
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockBookRepository) ReplaceCategories(ctx context.Context, bookID uuid.UUID, categoryIDs []uuid.UUID) error {
+	if m.replaceCategoriesFunc != nil {
+		return m.replaceCategoriesFunc(ctx, bookID, categoryIDs)
+	}
+	return nil
 }
 
 func (m *mockBookRepository) Delete(ctx context.Context, id uuid.UUID) error {
@@ -110,7 +122,7 @@ func TestBookServiceReadAndFilterPassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo)
+	svc := NewBookService(repo, nil)
 
 	book, err := svc.GetBook(context.Background(), bookID)
 	if err != nil || book.ID != bookID {
@@ -159,7 +171,7 @@ func TestBookServiceCreateAndUpdatePassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo)
+	svc := NewBookService(repo, nil)
 
 	created, err := svc.CreateBook(context.Background(), input)
 	if err != nil || created.ID != bookID {
@@ -189,12 +201,109 @@ func TestBookServiceQueryBooksPassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo)
+	svc := NewBookService(repo, nil)
 	result, err := svc.QueryBooks(context.Background(), filter, query)
 	if err != nil {
 		t.Fatalf("unexpected query error: %v", err)
 	}
 	if result.Total != 1 || !result.HasMore || result.NextCursor == nil || *result.NextCursor != nextCursor {
 		t.Fatalf("unexpected query result: %+v", result)
+	}
+}
+
+type mockAIService struct {
+	chatFunc func(ctx context.Context, input domain.AIChatRequest) (*domain.AIChatResponse, error)
+}
+
+func (m *mockAIService) Chat(ctx context.Context, input domain.AIChatRequest) (*domain.AIChatResponse, error) {
+	if m.chatFunc != nil {
+		return m.chatFunc(ctx, input)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func TestBookServiceGenerateSummaryStoresResult(t *testing.T) {
+	bookID := uuid.New()
+	repo := &mockBookRepository{
+		findByIDFunc: func(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+			if id != bookID {
+				t.Fatalf("unexpected id: %s", id)
+			}
+			return &domain.Book{
+				ID:          id,
+				Name:        "Test Book",
+				Description: "A test description.",
+				Author:      domain.Author{Name: "Test Author"},
+			}, nil
+		},
+		updateFunc: func(ctx context.Context, book *domain.Book) error {
+			if book.ID != bookID {
+				t.Fatalf("unexpected book id: %s", book.ID)
+			}
+			if book.Summary != "Generated summary." {
+				t.Fatalf("expected summary to be stored, got %q", book.Summary)
+			}
+			return nil
+		},
+	}
+
+	ai := &mockAIService{
+		chatFunc: func(ctx context.Context, input domain.AIChatRequest) (*domain.AIChatResponse, error) {
+			if input.Message == "" {
+				t.Fatalf("expected prompt to be set")
+			}
+			return &domain.AIChatResponse{Message: "Generated summary."}, nil
+		},
+	}
+
+	svc := NewBookService(repo, nil, ai)
+	got, err := svc.GenerateSummary(context.Background(), bookID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Summary != "Generated summary." {
+		t.Fatalf("expected returned summary, got %q", got.Summary)
+	}
+}
+
+func TestBookServiceGetBookGeneratesSummaryWhenMissing(t *testing.T) {
+	bookID := uuid.New()
+	repo := &mockBookRepository{
+		findByIDFunc: func(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+			if id != bookID {
+				t.Fatalf("unexpected id: %s", id)
+			}
+			return &domain.Book{
+				ID:          id,
+				Name:        "Test Book",
+				Description: "A test description.",
+				Summary:     "",
+				Author:      domain.Author{Name: "Test Author"},
+			}, nil
+		},
+		updateFunc: func(ctx context.Context, book *domain.Book) error {
+			if book.ID != bookID {
+				t.Fatalf("unexpected book id: %s", book.ID)
+			}
+			if book.Summary != "Generated summary." {
+				t.Fatalf("expected summary to be stored, got %q", book.Summary)
+			}
+			return nil
+		},
+	}
+
+	ai := &mockAIService{
+		chatFunc: func(ctx context.Context, input domain.AIChatRequest) (*domain.AIChatResponse, error) {
+			return &domain.AIChatResponse{Message: "Generated summary."}, nil
+		},
+	}
+
+	svc := NewBookService(repo, nil, ai)
+	got, err := svc.GetBook(context.Background(), bookID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Summary != "Generated summary." {
+		t.Fatalf("expected returned summary, got %q", got.Summary)
 	}
 }

@@ -172,28 +172,29 @@ func (r *bookRepository) QueryBooks(
 	defer rows.Close()
 
 	books := make([]domain.Book, 0)
-	for rows.Next() {
-		var book domain.Book
-		err := rows.Scan(
-			&book.ID,
-			&book.Name,
-			&book.AuthorID,
-			&book.AvailableStock,
-			&book.ImageURL,
-			&book.IsActive,
-			&book.Description,
-			&book.ISBN,
-			&book.Price,
-			&book.DiscountPercentage,
-			&book.PublisherID,
-			&book.CreatedAt,
-			&book.UpdatedAt,
-		)
-		if err != nil {
-			return nil, 0, nil, false, err
+		for rows.Next() {
+			var book domain.Book
+			err := rows.Scan(
+				&book.ID,
+				&book.Name,
+				&book.AuthorID,
+				&book.AvailableStock,
+				&book.ImageURL,
+				&book.IsActive,
+				&book.Description,
+				&book.Summary,
+				&book.ISBN,
+				&book.Price,
+				&book.DiscountPercentage,
+				&book.PublisherID,
+				&book.CreatedAt,
+				&book.UpdatedAt,
+			)
+			if err != nil {
+				return nil, 0, nil, false, err
+			}
+			books = append(books, book)
 		}
-		books = append(books, book)
-	}
 
 	hasMore := len(books) > int(limit)
 	if hasMore {
@@ -325,6 +326,40 @@ func (r *bookRepository) UpdateWithRelations(
 	return book, nil
 }
 
+func (r *bookRepository) ReplaceCategories(
+	ctx context.Context,
+	bookID uuid.UUID,
+	categoryIDs []uuid.UUID,
+) error {
+	categoryIDs = uniqueCategoryIDs(categoryIDs)
+
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("book_id = ?", bookID).Delete(&domain.BookCategory{}).Error; err != nil {
+			return err
+		}
+
+		if len(categoryIDs) == 0 {
+			return nil
+		}
+
+		if err := validateCategories(tx, categoryIDs); err != nil {
+			return err
+		}
+
+		for _, cid := range categoryIDs {
+			bc := domain.BookCategory{
+				BookID:     bookID,
+				CategoryID: cid,
+			}
+			if err := tx.Create(&bc).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
 func (r *bookRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.Book{}, "id = ?", id).Error
 }
@@ -338,6 +373,7 @@ func buildBookBaseQuery() sq.SelectBuilder {
 		"b.image_url",
 		"b.is_active",
 		"b.description",
+		"b.summary",
 		"b.isbn",
 		"b.price",
 		"b.discount_percentage",

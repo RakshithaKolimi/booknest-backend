@@ -19,6 +19,8 @@ func RegisterBookRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, controlle
 	admin.Use(middleware.JWTAuthMiddleware(jwtConfig), middleware.RequireAdmin())
 	{
 		admin.POST("", controller.createBook)
+		admin.POST("/:id/summary", controller.generateSummary)
+		admin.POST("/:id/categories", controller.generateCategories)
 		admin.PUT("/:id", controller.updateBook)
 		admin.DELETE("/:id", controller.deleteBook)
 	}

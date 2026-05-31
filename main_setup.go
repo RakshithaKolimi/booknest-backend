@@ -281,8 +281,6 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	userController := controller.NewUserController(userService)
 
 	bookRepo := repository.NewBookRepository(gormdb, sqlDB)
-	bookService := book_service.NewBookService(bookRepo)
-	bookController := controller.NewBookController(bookService)
 
 	authorRepo := repository.NewAuthorRepo(gormdb)
 	authorService := author_service.NewAuthorService(authorRepo)
@@ -341,6 +339,10 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	}
 	aiService := ai_service.NewAIService(aiProvider)
 	aiController := controller.NewAIController(aiService)
+
+	// Initialise Book service after AI (best-effort summary generation on create/update).
+	bookService := book_service.NewBookService(bookRepo, categoryRepo, aiService)
+	bookController := controller.NewBookController(bookService)
 
 	r := gin.Default()
 	r.Use(useCORSMiddleware(frontendAllowedOrigins()))
