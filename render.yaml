@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: ai-backend
-    runtime: go
-    buildCommand: go build -o server .
-    preDeployCommand: make migrate-up
-    startCommand: ./server
