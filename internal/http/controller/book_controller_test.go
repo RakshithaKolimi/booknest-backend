@@ -27,6 +27,7 @@ type mockBookServiceController struct {
 	generateEmbeddingsFunc func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
 	deleteBookFunc         func(ctx context.Context, id uuid.UUID) error
 	recommendBooksFunc     func(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Book, error)
+	semanticSearchFunc     func(ctx context.Context, query string, limit int) ([]domain.Book, error)
 }
 
 func (m *mockBookServiceController) CreateBook(ctx context.Context, input domain.BookInput) (*domain.Book, error) {
@@ -92,6 +93,12 @@ func (m *mockBookServiceController) DeleteBook(ctx context.Context, id uuid.UUID
 func (m *mockBookServiceController) RecommendBooks(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Book, error) {
 	if m.recommendBooksFunc != nil {
 		return m.recommendBooksFunc(ctx, userID, limit)
+	}
+	return []domain.Book{}, nil
+}
+func (m *mockBookServiceController) SemanticSearch(ctx context.Context, query string, limit int) ([]domain.Book, error) {
+	if m.semanticSearchFunc != nil {
+		return m.semanticSearchFunc(ctx, query, limit)
 	}
 	return []domain.Book{}, nil
 }
@@ -472,5 +479,109 @@ func TestBookControllerRecommendBooksInvalidLimit(t *testing.T) {
 	ctl.recommendBooks(c)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestBookControllerSemanticSearchHappyPath(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	book := domain.Book{ID: uuid.New(), Name: "Dune"}
+
+	svc := &mockBookServiceController{
+		semanticSearchFunc: func(ctx context.Context, query string, limit int) ([]domain.Book, error) {
+			if query != "space opera" {
+				t.Fatalf("unexpected query: %s", query)
+			}
+			if limit != 5 {
+				t.Fatalf("expected limit=5, got %d", limit)
+			}
+			return []domain.Book{book}, nil
+		},
+	}
+	ctl := NewBookController(svc).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/semantic-search?q=space+opera&limit=5", nil)
+
+	ctl.semanticSearch(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var got []domain.Book
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != book.ID {
+		t.Fatalf("unexpected results: %+v", got)
+	}
+}
+
+func TestBookControllerSemanticSearchMissingQuery(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctl := NewBookController(&mockBookServiceController{}).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/semantic-search", nil)
+
+	ctl.semanticSearch(c)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestBookControllerSemanticSearchInvalidLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctl := NewBookController(&mockBookServiceController{}).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/semantic-search?q=test&limit=bad", nil)
+
+	ctl.semanticSearch(c)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestBookControllerSemanticSearchClampsLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &mockBookServiceController{
+		semanticSearchFunc: func(ctx context.Context, query string, limit int) ([]domain.Book, error) {
+			if limit != 50 {
+				t.Fatalf("expected limit clamped to 50, got %d", limit)
+			}
+			return []domain.Book{}, nil
+		},
+	}
+	ctl := NewBookController(svc).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/semantic-search?q=test&limit=200", nil)
+
+	ctl.semanticSearch(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestBookControllerSemanticSearchServiceError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &mockBookServiceController{
+		semanticSearchFunc: func(ctx context.Context, query string, limit int) ([]domain.Book, error) {
+			return nil, errors.New("search failed")
+		},
+	}
+	ctl := NewBookController(svc).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/semantic-search?q=test", nil)
+
+	ctl.semanticSearch(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -396,6 +397,51 @@ func (c *bookController) recommendBooks(ctx *gin.Context) {
 	books, err := c.service.RecommendBooks(ctx, userID, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, books)
+}
+
+// semanticSearch godoc
+// @Summary      Semantic book search
+// @Description  Searches books by natural language query using vector similarity
+// @Tags         Books
+// @Produce      json
+// @Param        q      query  string  true   "Natural language search query"
+// @Param        limit  query  int     false  "Number of results (default 10, max 50)"
+// @Success      200  {array}   domain.Book
+// @Failure      400  {object}  map[string]string
+// @Failure      503  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /books/semantic-search [get]
+func (c *bookController) semanticSearch(ctx *gin.Context) {
+	query := strings.TrimSpace(ctx.Query("q"))
+	if query == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "q is required"})
+		return
+	}
+
+	limit := 10
+	if v := ctx.Query("limit"); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil || parsed <= 0 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+			return
+		}
+		if parsed > 50 {
+			parsed = 50
+		}
+		limit = parsed
+	}
+
+	books, err := c.service.SemanticSearch(ctx, query, limit)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, ai_service.ErrProviderUnavailable) {
+			status = http.StatusServiceUnavailable
+		}
+		ctx.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 

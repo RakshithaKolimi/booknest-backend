@@ -477,6 +477,28 @@ func (s *bookService) RecommendBooks(ctx context.Context, userID uuid.UUID, limi
 	return s.embeddingRepo.SearchNearestBooks(ctx, avgVector, limit, purchasedIDs)
 }
 
+func (s *bookService) SemanticSearch(ctx context.Context, query string, limit int) ([]domain.Book, error) {
+	if s.ai == nil || s.embeddingRepo == nil {
+		return nil, ai_service.ErrProviderUnavailable
+	}
+	if strings.TrimSpace(query) == "" {
+		return nil, errors.New("query is required")
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+
+	vectors, err := s.ai.Embed(ctx, []string{query})
+	if err != nil {
+		return nil, err
+	}
+	if len(vectors) != 1 || len(vectors[0]) == 0 {
+		return nil, errors.New("unexpected embedding response")
+	}
+
+	return s.embeddingRepo.SearchNearestBooks(ctx, domain.EmbeddingVector(vectors[0]), limit, nil)
+}
+
 func averageEmbeddings(embeddings []domain.BookEmbedding) domain.EmbeddingVector {
 	if len(embeddings) == 0 {
 		return nil

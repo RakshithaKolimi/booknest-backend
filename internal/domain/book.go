@@ -115,6 +115,7 @@ type BookService interface {
 	GenerateEmbeddings(ctx context.Context, id uuid.UUID) (*Book, error)
 	DeleteBook(ctx context.Context, id uuid.UUID) error
 	RecommendBooks(ctx context.Context, userID uuid.UUID, limit int) ([]Book, error)
+	SemanticSearch(ctx context.Context, query string, limit int) ([]Book, error)
 }
 
 type BookController interface {

@@ -10,6 +10,7 @@ func RegisterBookRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, controlle
 	public := r.Group("/books")
 	{
 		public.GET("/search", controller.queryBooks)
+		public.GET("/semantic-search", controller.semanticSearch)
 		public.POST("/filter", controller.filterBooks)
 		public.GET("/:id", controller.getBook)
 		public.GET("", controller.listBooks)
