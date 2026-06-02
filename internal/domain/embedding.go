@@ -59,9 +59,13 @@ type BookEmbeddingRepository interface {
 	// UpsertEmbedding is used by background refresh jobs to avoid read-before-write.
 	UpsertEmbedding(ctx context.Context, embedding *BookEmbedding) error
 
+	// GetEmbeddingsByBookIDs fetches embeddings for a set of book IDs in one query.
+	GetEmbeddingsByBookIDs(ctx context.Context, bookIDs []uuid.UUID) ([]BookEmbedding, error)
+
 	// SearchNearestBooks returns the most semantically similar books to the query embedding.
+	// excludeIDs skips books already purchased by the user.
 	// Implementation uses pgvector distance operator: ORDER BY embedding <-> $1.
-	SearchNearestBooks(ctx context.Context, query EmbeddingVector, limit int) ([]Book, error)
+	SearchNearestBooks(ctx context.Context, query EmbeddingVector, limit int, excludeIDs []uuid.UUID) ([]Book, error)
 }
 
 type BookEmbeddingService interface {

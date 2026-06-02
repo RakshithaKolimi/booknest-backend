@@ -344,7 +344,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 
 	// Initialise Book service after AI (best-effort summary generation on create/update).
 	embeddingService := book_embedding_service.New(aiService, bookEmbeddingRepo)
-	bookService := book_service.NewBookService(bookRepo, categoryRepo, embeddingService, aiService)
+	bookService := book_service.NewBookService(bookRepo, categoryRepo, embeddingService, bookEmbeddingRepo, orderRepo, aiService)
 	bookController := controller.NewBookController(bookService)
 
 	r := gin.Default()

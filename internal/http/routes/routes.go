@@ -8,10 +8,11 @@ const (
 	AIHealthRoute = "/ai/health"
 	AIChatRoute   = "/ai/chat"
 
-	BooksRoute       = "/books"
-	BookRoute        = "/book"
-	BookIDRoute      = "/book/:id"
-	BookReviewsRoute = "/books/:id/reviews"
+	BooksRoute            = "/books"
+	BookRoute             = "/book"
+	BookIDRoute           = "/book/:id"
+	BookReviewsRoute      = "/books/:id/reviews"
+	BookRecommendRoute    = "/books/recommend"
 
 	UsersRoute           = "/users"
 	UserRoute            = "/user/:id"

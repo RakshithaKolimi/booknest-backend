@@ -21,6 +21,8 @@ type bookService struct {
 	categoryRepo  domain.CategoryRepository
 	ai            domain.AIService
 	embeddingSvc  domain.BookEmbeddingService
+	embeddingRepo domain.BookEmbeddingRepository
+	orderRepo     domain.OrderRepository
 	embeddingJobs sync.Map
 }
 
@@ -28,6 +30,8 @@ func NewBookService(
 	repo domain.BookRepository,
 	categoryRepo domain.CategoryRepository,
 	embeddingSvc domain.BookEmbeddingService,
+	embeddingRepo domain.BookEmbeddingRepository,
+	orderRepo domain.OrderRepository,
 	ai ...domain.AIService,
 ) domain.BookService {
 	var aiSvc domain.AIService
@@ -35,10 +39,12 @@ func NewBookService(
 		aiSvc = ai[0]
 	}
 	svc := &bookService{
-		repo:         repo,
-		categoryRepo: categoryRepo,
-		ai:           aiSvc,
-		embeddingSvc: embeddingSvc,
+		repo:          repo,
+		categoryRepo:  categoryRepo,
+		ai:            aiSvc,
+		embeddingSvc:  embeddingSvc,
+		embeddingRepo: embeddingRepo,
+		orderRepo:     orderRepo,
 	}
 
 	// Start a background sync to generate embeddings for existing books
@@ -441,6 +447,54 @@ func buildCategoriesPrompt(title, author, description, summary string) string {
 		b.WriteString(summary)
 	}
 	return b.String()
+}
+
+func (s *bookService) RecommendBooks(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Book, error) {
+	if s.embeddingRepo == nil || s.orderRepo == nil {
+		return nil, errors.New("recommendation dependencies are not configured")
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+
+	purchasedIDs, err := s.orderRepo.GetPurchasedBookIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(purchasedIDs) == 0 {
+		return []domain.Book{}, nil
+	}
+
+	embeddings, err := s.embeddingRepo.GetEmbeddingsByBookIDs(ctx, purchasedIDs)
+	if err != nil {
+		return nil, err
+	}
+	if len(embeddings) == 0 {
+		return []domain.Book{}, nil
+	}
+
+	avgVector := averageEmbeddings(embeddings)
+	return s.embeddingRepo.SearchNearestBooks(ctx, avgVector, limit, purchasedIDs)
+}
+
+func averageEmbeddings(embeddings []domain.BookEmbedding) domain.EmbeddingVector {
+	if len(embeddings) == 0 {
+		return nil
+	}
+	dim := len(embeddings[0].Embedding)
+	avg := make(domain.EmbeddingVector, dim)
+	for _, emb := range embeddings {
+		for i, v := range emb.Embedding {
+			if i < dim {
+				avg[i] += v
+			}
+		}
+	}
+	n := float64(len(embeddings))
+	for i := range avg {
+		avg[i] /= n
+	}
+	return avg
 }
 
 func parseCategoryNames(raw string) ([]string, error) {

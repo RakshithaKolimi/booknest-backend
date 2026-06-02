@@ -54,6 +54,9 @@ func (s *stubOrderRepo) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID
 func (s *stubOrderRepo) DecrementStock(ctx context.Context, items []domain.OrderItem) error {
 	return nil
 }
+func (s *stubOrderRepo) GetPurchasedBookIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
 
 func TestListBookReviews(t *testing.T) {
 	bookID := uuid.New()

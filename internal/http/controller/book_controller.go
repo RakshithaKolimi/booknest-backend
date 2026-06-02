@@ -362,6 +362,46 @@ func (c *bookController) updateBook(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, book)
 }
 
+// recommendBooks godoc
+// @Summary      Recommend books
+// @Description  Returns books recommended for the authenticated user based on their purchase history using semantic embeddings
+// @Tags         Books
+// @Produce      json
+// @Param        limit  query  int  false  "Number of recommendations (default 10, max 50)"
+// @Success      200  {array}  domain.Book
+// @Failure      401  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /books/recommend [get]
+func (c *bookController) recommendBooks(ctx *gin.Context) {
+	userID, err := getUserID(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	limit := 10
+	if v := ctx.Query("limit"); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil || parsed <= 0 {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+			return
+		}
+		if parsed > 50 {
+			parsed = 50
+		}
+		limit = parsed
+	}
+
+	books, err := c.service.RecommendBooks(ctx, userID, limit)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, books)
+}
+
 func (c *bookController) deleteBook(ctx *gin.Context) {
 	id, err := uuid.Parse(ctx.Param("id"))
 	if err != nil {

@@ -26,6 +26,7 @@ type mockBookServiceController struct {
 	generateCategories     func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
 	generateEmbeddingsFunc func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
 	deleteBookFunc         func(ctx context.Context, id uuid.UUID) error
+	recommendBooksFunc     func(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Book, error)
 }
 
 func (m *mockBookServiceController) CreateBook(ctx context.Context, input domain.BookInput) (*domain.Book, error) {
@@ -87,6 +88,12 @@ func (m *mockBookServiceController) DeleteBook(ctx context.Context, id uuid.UUID
 		return m.deleteBookFunc(ctx, id)
 	}
 	return nil
+}
+func (m *mockBookServiceController) RecommendBooks(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Book, error) {
+	if m.recommendBooksFunc != nil {
+		return m.recommendBooksFunc(ctx, userID, limit)
+	}
+	return []domain.Book{}, nil
 }
 
 func TestBookControllerGetAndList(t *testing.T) {
@@ -337,5 +344,133 @@ func TestBookControllerQueryBooksClampLimit(t *testing.T) {
 	ctl.queryBooks(c)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestBookControllerRecommendBooksUnauthorized(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctl := NewBookController(&mockBookServiceController{}).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/recommend", nil)
+
+	ctl.recommendBooks(c)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without JWT claims, got %d", w.Code)
+	}
+}
+
+func TestBookControllerRecommendBooksHappyPath(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	recommendedBook := domain.Book{ID: uuid.New(), Name: "Recommended"}
+
+	svc := &mockBookServiceController{
+		recommendBooksFunc: func(ctx context.Context, uid uuid.UUID, limit int) ([]domain.Book, error) {
+			if uid != userID {
+				t.Fatalf("unexpected userID: %s", uid)
+			}
+			if limit != 5 {
+				t.Fatalf("expected limit=5, got %d", limit)
+			}
+			return []domain.Book{recommendedBook}, nil
+		},
+	}
+	ctl := NewBookController(svc).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("user_id", userID.String())
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/recommend?limit=5", nil)
+
+	ctl.recommendBooks(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var got []domain.Book
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != recommendedBook.ID {
+		t.Fatalf("unexpected recommendations: %+v", got)
+	}
+}
+
+func TestBookControllerRecommendBooksDefaultAndClampLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+
+	tests := []struct {
+		name      string
+		query     string
+		wantLimit int
+	}{
+		{"default limit", "/books/recommend", 10},
+		{"clamp over 50", "/books/recommend?limit=100", 50},
+		{"explicit limit", "/books/recommend?limit=20", 20},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &mockBookServiceController{
+				recommendBooksFunc: func(ctx context.Context, uid uuid.UUID, limit int) ([]domain.Book, error) {
+					if limit != tc.wantLimit {
+						t.Fatalf("expected limit=%d, got %d", tc.wantLimit, limit)
+					}
+					return []domain.Book{}, nil
+				},
+			}
+			ctl := NewBookController(svc).(*bookController)
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Set("user_id", userID.String())
+			c.Request = httptest.NewRequest(http.MethodGet, tc.query, nil)
+
+			ctl.recommendBooks(c)
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d", w.Code)
+			}
+		})
+	}
+}
+
+func TestBookControllerRecommendBooksServiceError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+
+	svc := &mockBookServiceController{
+		recommendBooksFunc: func(ctx context.Context, uid uuid.UUID, limit int) ([]domain.Book, error) {
+			return nil, errors.New("recommendation engine exploded")
+		},
+	}
+	ctl := NewBookController(svc).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("user_id", userID.String())
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/recommend", nil)
+
+	ctl.recommendBooks(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestBookControllerRecommendBooksInvalidLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.New()
+	ctl := NewBookController(&mockBookServiceController{}).(*bookController)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("user_id", userID.String())
+	c.Request = httptest.NewRequest(http.MethodGet, "/books/recommend?limit=bad", nil)
+
+	ctl.recommendBooks(c)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }

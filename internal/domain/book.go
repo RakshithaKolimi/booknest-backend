@@ -114,6 +114,7 @@ type BookService interface {
 	GenerateCategories(ctx context.Context, id uuid.UUID) (*Book, error)
 	GenerateEmbeddings(ctx context.Context, id uuid.UUID) (*Book, error)
 	DeleteBook(ctx context.Context, id uuid.UUID) error
+	RecommendBooks(ctx context.Context, userID uuid.UUID, limit int) ([]Book, error)
 }
 
 type BookController interface {

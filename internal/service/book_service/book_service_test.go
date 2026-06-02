@@ -35,6 +35,98 @@ func (m *mockBookEmbeddingService) GenerateBookEmbedding(ctx context.Context, bo
 	return nil
 }
 
+type mockBookEmbeddingRepository struct {
+	createEmbeddingFunc        func(ctx context.Context, embedding *domain.BookEmbedding) error
+	updateEmbeddingFunc        func(ctx context.Context, embedding *domain.BookEmbedding) error
+	getEmbeddingFunc           func(ctx context.Context, bookID uuid.UUID) (*domain.BookEmbedding, error)
+	upsertEmbeddingFunc        func(ctx context.Context, embedding *domain.BookEmbedding) error
+	getEmbeddingsByBookIDsFunc func(ctx context.Context, bookIDs []uuid.UUID) ([]domain.BookEmbedding, error)
+	searchNearestBooksFunc     func(ctx context.Context, query domain.EmbeddingVector, limit int, excludeIDs []uuid.UUID) ([]domain.Book, error)
+}
+
+func (m *mockBookEmbeddingRepository) CreateEmbedding(ctx context.Context, embedding *domain.BookEmbedding) error {
+	if m.createEmbeddingFunc != nil {
+		return m.createEmbeddingFunc(ctx, embedding)
+	}
+	return nil
+}
+
+func (m *mockBookEmbeddingRepository) UpdateEmbedding(ctx context.Context, embedding *domain.BookEmbedding) error {
+	if m.updateEmbeddingFunc != nil {
+		return m.updateEmbeddingFunc(ctx, embedding)
+	}
+	return nil
+}
+
+func (m *mockBookEmbeddingRepository) GetEmbedding(ctx context.Context, bookID uuid.UUID) (*domain.BookEmbedding, error) {
+	if m.getEmbeddingFunc != nil {
+		return m.getEmbeddingFunc(ctx, bookID)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockBookEmbeddingRepository) UpsertEmbedding(ctx context.Context, embedding *domain.BookEmbedding) error {
+	if m.upsertEmbeddingFunc != nil {
+		return m.upsertEmbeddingFunc(ctx, embedding)
+	}
+	return nil
+}
+
+func (m *mockBookEmbeddingRepository) GetEmbeddingsByBookIDs(ctx context.Context, bookIDs []uuid.UUID) ([]domain.BookEmbedding, error) {
+	if m.getEmbeddingsByBookIDsFunc != nil {
+		return m.getEmbeddingsByBookIDsFunc(ctx, bookIDs)
+	}
+	return nil, nil
+}
+
+func (m *mockBookEmbeddingRepository) SearchNearestBooks(ctx context.Context, query domain.EmbeddingVector, limit int, excludeIDs []uuid.UUID) ([]domain.Book, error) {
+	if m.searchNearestBooksFunc != nil {
+		return m.searchNearestBooksFunc(ctx, query, limit, excludeIDs)
+	}
+	return nil, errors.New("not implemented")
+}
+
+type mockOrderRepository struct {
+	getPurchasedBookIDsFunc func(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+}
+
+func (m *mockOrderRepository) CreateOrder(ctx context.Context, order *domain.Order) error {
+	return nil
+}
+func (m *mockOrderRepository) CreateOrderItems(ctx context.Context, items []domain.OrderItem) error {
+	return nil
+}
+func (m *mockOrderRepository) ListOrdersByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.OrderView, error) {
+	return nil, nil
+}
+func (m *mockOrderRepository) ListOrders(ctx context.Context, limit, offset int) ([]domain.OrderView, error) {
+	return nil, nil
+}
+func (m *mockOrderRepository) HasUserPurchasedBook(ctx context.Context, userID, bookID uuid.UUID) (bool, error) {
+	return false, nil
+}
+func (m *mockOrderRepository) GetOrderByID(ctx context.Context, orderID uuid.UUID) (domain.Order, error) {
+	return domain.Order{}, nil
+}
+func (m *mockOrderRepository) GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]domain.OrderItemDetail, error) {
+	return nil, nil
+}
+func (m *mockOrderRepository) UpdateOrderPayment(ctx context.Context, orderID uuid.UUID, status domain.PaymentStatus, method domain.PaymentMethod) error {
+	return nil
+}
+func (m *mockOrderRepository) UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status domain.OrderStatus, cancellationReason *string) error {
+	return nil
+}
+func (m *mockOrderRepository) DecrementStock(ctx context.Context, items []domain.OrderItem) error {
+	return nil
+}
+func (m *mockOrderRepository) GetPurchasedBookIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	if m.getPurchasedBookIDsFunc != nil {
+		return m.getPurchasedBookIDsFunc(ctx, userID)
+	}
+	return nil, nil
+}
+
 func (m *mockBookRepository) Create(ctx context.Context, book *domain.Book) error {
 	return nil
 }
@@ -149,7 +241,7 @@ func TestBookServiceReadAndFilterPassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil, nil)
+	svc := NewBookService(repo, nil, nil, nil, nil)
 
 	book, err := svc.GetBook(context.Background(), bookID)
 	if err != nil || book.ID != bookID {
@@ -204,7 +296,7 @@ func TestBookServiceCreateAndUpdatePassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil, nil)
+	svc := NewBookService(repo, nil, nil, nil, nil)
 
 	created, err := svc.CreateBook(context.Background(), input)
 	if err != nil || created.ID != bookID {
@@ -234,7 +326,7 @@ func TestBookServiceQueryBooksPassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil, nil)
+	svc := NewBookService(repo, nil, nil, nil, nil)
 	result, err := svc.QueryBooks(context.Background(), filter, query)
 	if err != nil {
 		t.Fatalf("unexpected query error: %v", err)
@@ -297,7 +389,7 @@ func TestBookServiceGenerateSummaryStoresResult(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil, nil, ai)
+	svc := NewBookService(repo, nil, nil, nil, nil, ai)
 	got, err := svc.GenerateSummary(context.Background(), bookID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -339,7 +431,7 @@ func TestBookServiceGetBookGeneratesSummaryWhenMissing(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil, nil, ai)
+	svc := NewBookService(repo, nil, nil, nil, nil, ai)
 	got, err := svc.GetBook(context.Background(), bookID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -376,12 +468,135 @@ func TestBookServiceGenerateEmbeddingsStoresVectors(t *testing.T) {
 	}
 
 	ai := &mockAIService{}
-	svc := NewBookService(repo, nil, embeddingSvc, ai)
+	svc := NewBookService(repo, nil, embeddingSvc, nil, nil, ai)
 	got, err := svc.GenerateEmbeddings(context.Background(), bookID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got.ID != bookID {
 		t.Fatalf("unexpected book returned: %+v", got)
+	}
+}
+
+func TestRecommendBooksNoPurchases(t *testing.T) {
+	userID := uuid.New()
+	orderRepo := &mockOrderRepository{
+		getPurchasedBookIDsFunc: func(ctx context.Context, uid uuid.UUID) ([]uuid.UUID, error) {
+			if uid != userID {
+				t.Fatalf("unexpected userID: %s", uid)
+			}
+			return []uuid.UUID{}, nil
+		},
+	}
+
+	svc := NewBookService(&mockBookRepository{}, nil, nil, &mockBookEmbeddingRepository{}, orderRepo)
+	books, err := svc.RecommendBooks(context.Background(), userID, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(books) != 0 {
+		t.Fatalf("expected empty slice for user with no purchases, got %d items", len(books))
+	}
+}
+
+func TestRecommendBooksNilDepsReturnsError(t *testing.T) {
+	svc := NewBookService(&mockBookRepository{}, nil, nil, nil, nil)
+	_, err := svc.RecommendBooks(context.Background(), uuid.New(), 10)
+	if err == nil {
+		t.Fatal("expected error when deps are nil")
+	}
+}
+
+func TestRecommendBooksNoPurchasedEmbeddings(t *testing.T) {
+	userID := uuid.New()
+	bookID := uuid.New()
+
+	orderRepo := &mockOrderRepository{
+		getPurchasedBookIDsFunc: func(ctx context.Context, uid uuid.UUID) ([]uuid.UUID, error) {
+			return []uuid.UUID{bookID}, nil
+		},
+	}
+	embeddingRepo := &mockBookEmbeddingRepository{
+		getEmbeddingsByBookIDsFunc: func(ctx context.Context, bookIDs []uuid.UUID) ([]domain.BookEmbedding, error) {
+			return []domain.BookEmbedding{}, nil
+		},
+	}
+
+	svc := NewBookService(&mockBookRepository{}, nil, nil, embeddingRepo, orderRepo)
+	books, err := svc.RecommendBooks(context.Background(), userID, 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(books) != 0 {
+		t.Fatalf("expected empty slice when no embeddings exist, got %d items", len(books))
+	}
+}
+
+func TestRecommendBooksHappyPath(t *testing.T) {
+	userID := uuid.New()
+	purchasedID1 := uuid.New()
+	purchasedID2 := uuid.New()
+	recommendedID := uuid.New()
+
+	vec1 := domain.EmbeddingVector{1.0, 0.0}
+	vec2 := domain.EmbeddingVector{0.0, 1.0}
+	wantAvg := domain.EmbeddingVector{0.5, 0.5}
+
+	orderRepo := &mockOrderRepository{
+		getPurchasedBookIDsFunc: func(ctx context.Context, uid uuid.UUID) ([]uuid.UUID, error) {
+			return []uuid.UUID{purchasedID1, purchasedID2}, nil
+		},
+	}
+	embeddingRepo := &mockBookEmbeddingRepository{
+		getEmbeddingsByBookIDsFunc: func(ctx context.Context, bookIDs []uuid.UUID) ([]domain.BookEmbedding, error) {
+			if len(bookIDs) != 2 {
+				t.Fatalf("expected 2 book IDs, got %d", len(bookIDs))
+			}
+			return []domain.BookEmbedding{
+				{BookID: purchasedID1, Embedding: vec1},
+				{BookID: purchasedID2, Embedding: vec2},
+			}, nil
+		},
+		searchNearestBooksFunc: func(ctx context.Context, query domain.EmbeddingVector, limit int, excludeIDs []uuid.UUID) ([]domain.Book, error) {
+			if len(query) != 2 || query[0] != wantAvg[0] || query[1] != wantAvg[1] {
+				t.Fatalf("unexpected averaged query vector: %v", query)
+			}
+			if limit != 5 {
+				t.Fatalf("unexpected limit: %d", limit)
+			}
+			if len(excludeIDs) != 2 {
+				t.Fatalf("expected 2 exclude IDs, got %d", len(excludeIDs))
+			}
+			return []domain.Book{{ID: recommendedID, Name: "Recommended Book"}}, nil
+		},
+	}
+
+	svc := NewBookService(&mockBookRepository{}, nil, nil, embeddingRepo, orderRepo)
+	books, err := svc.RecommendBooks(context.Background(), userID, 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(books) != 1 || books[0].ID != recommendedID {
+		t.Fatalf("unexpected recommendations: %+v", books)
+	}
+}
+
+func TestAverageEmbeddings(t *testing.T) {
+	embeddings := []domain.BookEmbedding{
+		{Embedding: domain.EmbeddingVector{1.0, 2.0, 3.0}},
+		{Embedding: domain.EmbeddingVector{3.0, 4.0, 5.0}},
+	}
+	avg := averageEmbeddings(embeddings)
+	want := domain.EmbeddingVector{2.0, 3.0, 4.0}
+	for i := range want {
+		if avg[i] != want[i] {
+			t.Fatalf("avg[%d] = %f, want %f", i, avg[i], want[i])
+		}
+	}
+}
+
+func TestAverageEmbeddingsEmpty(t *testing.T) {
+	if got := averageEmbeddings(nil); got != nil {
+		t.Fatalf("expected nil for empty input, got %v", got)
 	}
 }

@@ -85,6 +85,10 @@ func (m *mockOrderRepository) HasUserPurchasedBook(ctx context.Context, userID, 
 	return false, nil
 }
 
+func (m *mockOrderRepository) GetPurchasedBookIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+
 type noopCartRepository struct{}
 
 func (n *noopCartRepository) GetOrCreateCart(ctx context.Context, userID uuid.UUID) (domain.Cart, error) {

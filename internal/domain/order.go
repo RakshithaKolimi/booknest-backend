@@ -85,6 +85,7 @@ type OrderRepository interface {
 	UpdateOrderPayment(ctx context.Context, orderID uuid.UUID, status PaymentStatus, method PaymentMethod) error
 	UpdateOrderStatus(ctx context.Context, orderID uuid.UUID, status OrderStatus, cancellationReason *string) error
 	DecrementStock(ctx context.Context, items []OrderItem) error
+	GetPurchasedBookIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 }
 
 type OrderService interface {

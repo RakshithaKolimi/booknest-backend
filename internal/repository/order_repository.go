@@ -354,6 +354,35 @@ func (r *orderRepo) UpdateOrderStatus(
 	return execWithTx(ctx, r.db, query, args...)
 }
 
+func (r *orderRepo) GetPurchasedBookIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	query := `
+		SELECT DISTINCT oi.book_id
+		FROM order_items oi
+		JOIN orders o ON o.id = oi.order_id
+		WHERE o.user_id = $1
+			AND o.status = $2
+			AND o.deleted_at IS NULL
+			AND oi.deleted_at IS NULL
+	`
+
+	rows, err := queryWithTx(ctx, r.db, query, userID, domain.OrderCompleted)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
 func (r *orderRepo) DecrementStock(
 	ctx context.Context,
 	items []domain.OrderItem,

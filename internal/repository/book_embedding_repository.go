@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -66,10 +68,22 @@ func (r *bookEmbeddingRepository) UpsertEmbedding(ctx context.Context, embedding
 	}).Create(embedding).Error
 }
 
+func (r *bookEmbeddingRepository) GetEmbeddingsByBookIDs(ctx context.Context, bookIDs []uuid.UUID) ([]domain.BookEmbedding, error) {
+	if len(bookIDs) == 0 {
+		return nil, nil
+	}
+	var embeddings []domain.BookEmbedding
+	if err := r.db.WithContext(ctx).Where("book_id IN ?", bookIDs).Find(&embeddings).Error; err != nil {
+		return nil, err
+	}
+	return embeddings, nil
+}
+
 func (r *bookEmbeddingRepository) SearchNearestBooks(
 	ctx context.Context,
 	query domain.EmbeddingVector,
 	limit int,
+	excludeIDs []uuid.UUID,
 ) ([]domain.Book, error) {
 	if limit <= 0 {
 		limit = 10
@@ -81,8 +95,8 @@ func (r *bookEmbeddingRepository) SearchNearestBooks(
 		return nil, errors.New("sql db handle is required")
 	}
 
-	// Use pgvector distance operator (<->) for nearest-neighbor semantic search.
-	const sqlQuery = `
+	// Base query using pgvector distance operator (<->) for nearest-neighbor search.
+	baseQuery := `
 SELECT
   b.id,
   b.name,
@@ -100,12 +114,22 @@ SELECT
   b.updated_at
 FROM books b
 JOIN book_embeddings be ON be.book_id = b.id
-WHERE b.deleted_at IS NULL
-ORDER BY be.embedding <-> $1
-LIMIT $2
-`
+WHERE b.deleted_at IS NULL`
 
-	rows, err := r.sql.QueryContext(ctx, sqlQuery, query, limit)
+	args := []any{query, limit}
+
+	if len(excludeIDs) > 0 {
+		placeholders := make([]string, len(excludeIDs))
+		for i, id := range excludeIDs {
+			args = append(args, id)
+			placeholders[i] = fmt.Sprintf("$%d", len(args))
+		}
+		baseQuery += " AND b.id NOT IN (" + strings.Join(placeholders, ",") + ")"
+	}
+
+	baseQuery += "\nORDER BY be.embedding <-> $1\nLIMIT $2"
+
+	rows, err := r.sql.QueryContext(ctx, baseQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +163,5 @@ LIMIT $2
 		return nil, err
 	}
 
-	// Note: These Book records are minimally hydrated. If the caller needs
-	// Author/Publisher/Categories preloaded, fetch by IDs in a second step.
 	return books, nil
 }

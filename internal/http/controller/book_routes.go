@@ -15,6 +15,12 @@ func RegisterBookRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, controlle
 		public.GET("", controller.listBooks)
 	}
 
+	user := r.Group("/books")
+	user.Use(middleware.JWTAuthMiddleware(jwtConfig))
+	{
+		user.GET("/recommend", controller.recommendBooks)
+	}
+
 	admin := r.Group("/books")
 	admin.Use(middleware.JWTAuthMiddleware(jwtConfig), middleware.RequireAdmin())
 	{
