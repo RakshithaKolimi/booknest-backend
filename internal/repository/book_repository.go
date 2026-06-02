@@ -134,7 +134,7 @@ func (r *bookRepository) QueryBooks(
 
 	// Check if cursor exists
 	if q.Cursor != nil && *q.Cursor != "" {
-		// Get the cursor created_at and cursor id 
+		// Get the cursor created_at and cursor id
 		cursorCreatedAt, cursorID, err := decodeBookCursor(*q.Cursor)
 		if err != nil {
 			return nil, 0, nil, false, err
@@ -172,29 +172,29 @@ func (r *bookRepository) QueryBooks(
 	defer rows.Close()
 
 	books := make([]domain.Book, 0)
-		for rows.Next() {
-			var book domain.Book
-			err := rows.Scan(
-				&book.ID,
-				&book.Name,
-				&book.AuthorID,
-				&book.AvailableStock,
-				&book.ImageURL,
-				&book.IsActive,
-				&book.Description,
-				&book.Summary,
-				&book.ISBN,
-				&book.Price,
-				&book.DiscountPercentage,
-				&book.PublisherID,
-				&book.CreatedAt,
-				&book.UpdatedAt,
-			)
-			if err != nil {
-				return nil, 0, nil, false, err
-			}
-			books = append(books, book)
+	for rows.Next() {
+		var book domain.Book
+		err := rows.Scan(
+			&book.ID,
+			&book.Name,
+			&book.AuthorID,
+			&book.AvailableStock,
+			&book.ImageURL,
+			&book.IsActive,
+			&book.Description,
+			&book.Summary,
+			&book.ISBN,
+			&book.Price,
+			&book.DiscountPercentage,
+			&book.PublisherID,
+			&book.CreatedAt,
+			&book.UpdatedAt,
+		)
+		if err != nil {
+			return nil, 0, nil, false, err
 		}
+		books = append(books, book)
+	}
 
 	hasMore := len(books) > int(limit)
 	if hasMore {
@@ -362,6 +362,27 @@ func (r *bookRepository) ReplaceCategories(
 
 func (r *bookRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.Book{}, "id = ?", id).Error
+}
+
+func (r *bookRepository) ListBooksWithoutEmbeddings(ctx context.Context, limit, offset int) ([]domain.Book, error) {
+	var books []domain.Book
+	tx := r.db.WithContext(ctx).
+		Model(&domain.Book{}).
+		Preload("Author").
+		Preload("Categories").
+		Joins("LEFT JOIN book_embeddings be ON be.book_id = books.id").
+		Where("be.book_id IS NULL").
+		Limit(limit).
+		Offset(offset).
+		Order("created_at DESC").
+		Find(&books)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	if err := r.hydrateBookReviewSummaries(ctx, books); err != nil {
+		return nil, err
+	}
+	return books, nil
 }
 
 func buildBookBaseQuery() sq.SelectBuilder {

@@ -147,6 +147,11 @@ definitions:
         example: 550e8400-e29b-41d4-a716-446655440002
         format: uuid
         type: string
+      summary:
+        example: A gripping dystopian classic about surveillance and control, following
+          Winston Smith as he questions the Party's reality. Orwell's chilling vision
+          explores truth, freedom, and resistance under totalitarian rule.
+        type: string
       total_reviews:
         example: 128
         type: integer
@@ -1521,6 +1526,96 @@ paths:
       summary: Get book by ID
       tags:
       - Books
+  /books/{id}/categories:
+    post:
+      description: Generates and stores AI categories for a book (admin only)
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Book'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate book categories
+      tags:
+      - Books
+  /books/{id}/embeddings:
+    post:
+      description: Generates and stores AI embeddings for a book (admin only)
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Book'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate book embeddings
+      tags:
+      - Books
   /books/{id}/reviews:
     get:
       description: Returns all reviews for a specific book with summary stats
@@ -1604,6 +1699,51 @@ paths:
       summary: Create or update a review
       tags:
       - Reviews
+  /books/{id}/summary:
+    post:
+      description: Generates and stores an AI summary for a book (admin only)
+      parameters:
+      - description: Book ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Book'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate book summary
+      tags:
+      - Books
   /books/filter:
     post:
       consumes:

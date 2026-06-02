@@ -12,6 +12,7 @@ type AIController interface {
 
 type AIService interface {
 	Chat(ctx context.Context, input AIChatRequest) (*AIChatResponse, error)
+	Embed(ctx context.Context, inputs []string) ([][]float64, error)
 }
 
 type AIChatRequest struct {

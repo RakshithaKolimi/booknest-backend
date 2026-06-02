@@ -93,6 +93,7 @@ type BookRepository interface {
 	Create(ctx context.Context, book *Book) error
 	CreateWithRelations(ctx context.Context, input BookInput) (*Book, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*Book, error)
+	ListBooksWithoutEmbeddings(ctx context.Context, limit, offset int) ([]Book, error)
 	List(ctx context.Context, limit, offset int) ([]Book, error)
 	FilterByCriteria(ctx context.Context, filter BookFilter, pagination QueryOptions) ([]Book, int64, error)
 	QueryBooks(ctx context.Context, filter BookFilter, pagination QueryOptions) ([]Book, int64, *string, bool, error)
@@ -111,6 +112,7 @@ type BookService interface {
 	UpdateBook(ctx context.Context, id uuid.UUID, input BookInput) (*Book, error)
 	GenerateSummary(ctx context.Context, id uuid.UUID) (*Book, error)
 	GenerateCategories(ctx context.Context, id uuid.UUID) (*Book, error)
+	GenerateEmbeddings(ctx context.Context, id uuid.UUID) (*Book, error)
 	DeleteBook(ctx context.Context, id uuid.UUID) error
 }
 

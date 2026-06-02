@@ -38,3 +38,25 @@ func (s *aiService) Chat(ctx context.Context, input domain.AIChatRequest) (*doma
 
 	return &domain.AIChatResponse{Message: reply}, nil
 }
+
+func (s *aiService) Embed(ctx context.Context, inputs []string) ([][]float64, error) {
+	if len(inputs) == 0 {
+		return nil, errors.New("inputs are required")
+	}
+	if s.provider == nil {
+		return nil, ErrProviderUnavailable
+	}
+
+	for _, input := range inputs {
+		if strings.TrimSpace(input) == "" {
+			return nil, errors.New("inputs must not contain empty strings")
+		}
+	}
+
+	vectors, err := s.provider.Embed(ctx, inputs)
+	if err != nil {
+		return nil, err
+	}
+
+	return vectors, nil
+}

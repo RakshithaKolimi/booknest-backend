@@ -11,15 +11,28 @@ import (
 )
 
 type mockBookRepository struct {
-	createWithRelationsFunc func(ctx context.Context, input domain.BookInput) (*domain.Book, error)
-	findByIDFunc            func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
-	listFunc                func(ctx context.Context, limit, offset int) ([]domain.Book, error)
-	filterByCriteriaFunc    func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, error)
-	queryBooksFunc          func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, *string, bool, error)
-	updateFunc              func(ctx context.Context, book *domain.Book) error
-	updateWithRelationsFunc func(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error)
-	replaceCategoriesFunc   func(ctx context.Context, bookID uuid.UUID, categoryIDs []uuid.UUID) error
-	deleteFunc              func(ctx context.Context, id uuid.UUID) error
+	createWithRelationsFunc        func(ctx context.Context, input domain.BookInput) (*domain.Book, error)
+	findByIDFunc                   func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
+	listBooksWithoutEmbeddingsFunc func(ctx context.Context, limit, offset int) ([]domain.Book, error)
+	listFunc                       func(ctx context.Context, limit, offset int) ([]domain.Book, error)
+	filterByCriteriaFunc           func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, error)
+	queryBooksFunc                 func(ctx context.Context, filter domain.BookFilter, pagination domain.QueryOptions) ([]domain.Book, int64, *string, bool, error)
+	updateFunc                     func(ctx context.Context, book *domain.Book) error
+	updateWithRelationsFunc        func(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error)
+	replaceCategoriesFunc          func(ctx context.Context, bookID uuid.UUID, categoryIDs []uuid.UUID) error
+	upsertEmbeddingsFunc           func(ctx context.Context, embeddings *domain.BookEmbedding) error
+	deleteFunc                     func(ctx context.Context, id uuid.UUID) error
+}
+
+type mockBookEmbeddingService struct {
+	generateBookEmbeddingFunc func(ctx context.Context, book domain.Book) error
+}
+
+func (m *mockBookEmbeddingService) GenerateBookEmbedding(ctx context.Context, book domain.Book) error {
+	if m.generateBookEmbeddingFunc != nil {
+		return m.generateBookEmbeddingFunc(ctx, book)
+	}
+	return nil
 }
 
 func (m *mockBookRepository) Create(ctx context.Context, book *domain.Book) error {
@@ -43,6 +56,13 @@ func (m *mockBookRepository) FindByID(ctx context.Context, id uuid.UUID) (*domai
 func (m *mockBookRepository) List(ctx context.Context, limit, offset int) ([]domain.Book, error) {
 	if m.listFunc != nil {
 		return m.listFunc(ctx, limit, offset)
+	}
+	return []domain.Book{}, nil
+}
+
+func (m *mockBookRepository) ListBooksWithoutEmbeddings(ctx context.Context, limit, offset int) ([]domain.Book, error) {
+	if m.listBooksWithoutEmbeddingsFunc != nil {
+		return m.listBooksWithoutEmbeddingsFunc(ctx, limit, offset)
 	}
 	return []domain.Book{}, nil
 }
@@ -78,6 +98,13 @@ func (m *mockBookRepository) UpdateWithRelations(ctx context.Context, id uuid.UU
 func (m *mockBookRepository) ReplaceCategories(ctx context.Context, bookID uuid.UUID, categoryIDs []uuid.UUID) error {
 	if m.replaceCategoriesFunc != nil {
 		return m.replaceCategoriesFunc(ctx, bookID, categoryIDs)
+	}
+	return nil
+}
+
+func (m *mockBookRepository) UpsertEmbeddings(ctx context.Context, embeddings *domain.BookEmbedding) error {
+	if m.upsertEmbeddingsFunc != nil {
+		return m.upsertEmbeddingsFunc(ctx, embeddings)
 	}
 	return nil
 }
@@ -122,7 +149,7 @@ func TestBookServiceReadAndFilterPassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil)
+	svc := NewBookService(repo, nil, nil)
 
 	book, err := svc.GetBook(context.Background(), bookID)
 	if err != nil || book.ID != bookID {
@@ -162,6 +189,12 @@ func TestBookServiceCreateAndUpdatePassThrough(t *testing.T) {
 			createCalled = true
 			return &domain.Book{ID: bookID, Name: got.Name}, nil
 		},
+		findByIDFunc: func(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+			if id != bookID {
+				t.Fatalf("unexpected id")
+			}
+			return &domain.Book{ID: id, Name: input.Name}, nil
+		},
 		updateWithRelationsFunc: func(ctx context.Context, id uuid.UUID, got domain.BookInput) (*domain.Book, error) {
 			updateCalled = true
 			if id != bookID {
@@ -171,7 +204,7 @@ func TestBookServiceCreateAndUpdatePassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil)
+	svc := NewBookService(repo, nil, nil)
 
 	created, err := svc.CreateBook(context.Background(), input)
 	if err != nil || created.ID != bookID {
@@ -201,7 +234,7 @@ func TestBookServiceQueryBooksPassThrough(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil)
+	svc := NewBookService(repo, nil, nil)
 	result, err := svc.QueryBooks(context.Background(), filter, query)
 	if err != nil {
 		t.Fatalf("unexpected query error: %v", err)
@@ -212,7 +245,8 @@ func TestBookServiceQueryBooksPassThrough(t *testing.T) {
 }
 
 type mockAIService struct {
-	chatFunc func(ctx context.Context, input domain.AIChatRequest) (*domain.AIChatResponse, error)
+	chatFunc  func(ctx context.Context, input domain.AIChatRequest) (*domain.AIChatResponse, error)
+	embedFunc func(ctx context.Context, inputs []string) ([][]float64, error)
 }
 
 func (m *mockAIService) Chat(ctx context.Context, input domain.AIChatRequest) (*domain.AIChatResponse, error) {
@@ -220,6 +254,13 @@ func (m *mockAIService) Chat(ctx context.Context, input domain.AIChatRequest) (*
 		return m.chatFunc(ctx, input)
 	}
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockAIService) Embed(ctx context.Context, inputs []string) ([][]float64, error) {
+	if m.embedFunc != nil {
+		return m.embedFunc(ctx, inputs)
+	}
+	return [][]float64{{1, 2, 3}}, nil
 }
 
 func TestBookServiceGenerateSummaryStoresResult(t *testing.T) {
@@ -256,7 +297,7 @@ func TestBookServiceGenerateSummaryStoresResult(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil, ai)
+	svc := NewBookService(repo, nil, nil, ai)
 	got, err := svc.GenerateSummary(context.Background(), bookID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -298,12 +339,49 @@ func TestBookServiceGetBookGeneratesSummaryWhenMissing(t *testing.T) {
 		},
 	}
 
-	svc := NewBookService(repo, nil, ai)
+	svc := NewBookService(repo, nil, nil, ai)
 	got, err := svc.GetBook(context.Background(), bookID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got.Summary != "Generated summary." {
 		t.Fatalf("expected returned summary, got %q", got.Summary)
+	}
+}
+
+func TestBookServiceGenerateEmbeddingsStoresVectors(t *testing.T) {
+	bookID := uuid.New()
+	repo := &mockBookRepository{
+		findByIDFunc: func(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+			return &domain.Book{
+				ID:          id,
+				Name:        "Test Book",
+				Description: "A description.",
+				Summary:     "A summary.",
+				Categories:  []domain.Category{{Name: "Fiction"}, {Name: "Adventure"}},
+			}, nil
+		},
+	}
+
+	embeddingSvc := &mockBookEmbeddingService{
+		generateBookEmbeddingFunc: func(ctx context.Context, book domain.Book) error {
+			if book.ID != bookID {
+				t.Fatalf("unexpected book id: %s", book.ID)
+			}
+			if book.Name == "" || book.Description == "" {
+				t.Fatalf("expected book fields to be present, got %+v", book)
+			}
+			return nil
+		},
+	}
+
+	ai := &mockAIService{}
+	svc := NewBookService(repo, nil, embeddingSvc, ai)
+	got, err := svc.GenerateEmbeddings(context.Background(), bookID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID != bookID {
+		t.Fatalf("unexpected book returned: %+v", got)
 	}
 }

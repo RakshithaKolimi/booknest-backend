@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -14,25 +17,84 @@ import (
 )
 
 type bookService struct {
-	repo         domain.BookRepository
-	categoryRepo domain.CategoryRepository
-	ai           domain.AIService
+	repo          domain.BookRepository
+	categoryRepo  domain.CategoryRepository
+	ai            domain.AIService
+	embeddingSvc  domain.BookEmbeddingService
+	embeddingJobs sync.Map
 }
 
 func NewBookService(
 	repo domain.BookRepository,
 	categoryRepo domain.CategoryRepository,
+	embeddingSvc domain.BookEmbeddingService,
 	ai ...domain.AIService,
 ) domain.BookService {
 	var aiSvc domain.AIService
 	if len(ai) > 0 {
 		aiSvc = ai[0]
 	}
-	return &bookService{
+	svc := &bookService{
 		repo:         repo,
 		categoryRepo: categoryRepo,
 		ai:           aiSvc,
+		embeddingSvc: embeddingSvc,
 	}
+
+	// Start a background sync to generate embeddings for existing books
+	// that don't have embeddings yet.
+	if aiSvc != nil && embeddingSvc != nil {
+		svc.startEmbeddingSyncOnStartup()
+	}
+
+	return svc
+}
+
+// startEmbeddingSyncOnStartup will scan existing books without embeddings
+// and generate embeddings for them. It's started automatically when the
+// service is created and an AI provider is available.
+func (s *bookService) startEmbeddingSyncOnStartup() {
+	if s.ai == nil || s.embeddingSvc == nil {
+		return
+	}
+
+	go func() {
+		slog.Info("starting startup embedding sync")
+		defer slog.Info("startup embedding sync completed")
+
+		const pageSize = 50
+		offset := 0
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			books, err := s.repo.ListBooksWithoutEmbeddings(ctx, pageSize, offset)
+			cancel()
+			if err != nil {
+				slog.Warn("failed listing books without embeddings", "error", err)
+				return
+			}
+			if len(books) == 0 {
+				return
+			}
+
+			for _, b := range books {
+				// Best-effort: generate embeddings but don't stop the loop on error.
+				if err := s.generateAndStoreEmbeddings(context.Background(), &b); err != nil {
+					if errors.Is(err, ai_service.ErrProviderUnavailable) {
+						slog.Warn("AI provider unavailable during startup embedding sync")
+						return
+					}
+					slog.Warn("failed to generate embeddings for book", "book_id", b.ID.String(), "error", err)
+				} else {
+					slog.Info("generated embeddings for book", "book_id", b.ID.String())
+				}
+			}
+
+			if len(books) < pageSize {
+				return
+			}
+			offset += pageSize
+		}
+	}()
 }
 
 func (s *bookService) CreateBook(ctx context.Context, input domain.BookInput) (*domain.Book, error) {
@@ -41,19 +103,28 @@ func (s *bookService) CreateBook(ctx context.Context, input domain.BookInput) (*
 		return nil, err
 	}
 
+	book, err = s.repo.FindByID(ctx, book.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	updated := book
 
 	// Best-effort: don't block book creation on AI availability.
-	if summaryUpdated, err := s.GenerateSummary(ctx, book.ID); err == nil {
+	if summaryUpdated, err := s.generateAndStoreSummary(ctx, book); err == nil {
 		updated = summaryUpdated
+		book = summaryUpdated
 	}
 
 	// Best-effort: if no categories were provided, try generating them.
 	if len(input.CategoryIDs) == 0 && s.ai != nil {
-		if categoriesUpdated, err := s.GenerateCategories(ctx, book.ID); err == nil {
+		if categoriesUpdated, err := s.generateAndStoreCategories(ctx, book); err == nil {
 			updated = categoriesUpdated
+			book = categoriesUpdated
 		}
 	}
+
+	s.scheduleEmbeddingRefresh(book.ID)
 
 	return updated, nil
 }
@@ -64,16 +135,23 @@ func (s *bookService) GetBook(ctx context.Context, id uuid.UUID) (*domain.Book, 
 		return nil, err
 	}
 
+	embeddingNeeded := false
 	if strings.TrimSpace(book.Summary) == "" && s.ai != nil {
-		if updated, err := s.generateAndStoreSummary(ctx, book); err == nil {
-			return updated, nil
+		if summaryUpdated, err := s.generateAndStoreSummary(ctx, book); err == nil {
+			book = summaryUpdated
+			embeddingNeeded = true
 		}
 	}
 
 	if len(book.Categories) == 0 && s.ai != nil {
-		if updated, err := s.generateAndStoreCategories(ctx, book); err == nil {
-			return updated, nil
+		if categoriesUpdated, err := s.generateAndStoreCategories(ctx, book); err == nil {
+			book = categoriesUpdated
+			embeddingNeeded = true
 		}
+	}
+
+	if embeddingNeeded {
+		s.scheduleEmbeddingRefresh(book.ID)
 	}
 
 	return book, nil
@@ -134,17 +212,19 @@ func (s *bookService) UpdateBook(
 
 	if strings.TrimSpace(book.Summary) == "" && s.ai != nil {
 		// Best-effort: keep serving updates even if AI is down/unconfigured.
-		if updated, err := s.GenerateSummary(ctx, book.ID); err == nil {
-			return updated, nil
+		if summaryUpdated, err := s.generateAndStoreSummary(ctx, book); err == nil {
+			book = summaryUpdated
 		}
 	}
 
 	if len(input.CategoryIDs) == 0 && len(book.Categories) == 0 && s.ai != nil {
 		// Best-effort: only generate categories if none were provided.
-		if updated, err := s.GenerateCategories(ctx, book.ID); err == nil {
-			return updated, nil
+		if categoriesUpdated, err := s.generateAndStoreCategories(ctx, book); err == nil {
+			book = categoriesUpdated
 		}
 	}
+
+	s.scheduleEmbeddingRefresh(book.ID)
 
 	return book, nil
 }
@@ -159,7 +239,13 @@ func (s *bookService) GenerateSummary(ctx context.Context, id uuid.UUID) (*domai
 		return nil, err
 	}
 
-	return s.generateAndStoreSummary(ctx, book)
+	updated, err := s.generateAndStoreSummary(ctx, book)
+	if err != nil {
+		return nil, err
+	}
+
+	s.scheduleEmbeddingRefresh(book.ID)
+	return updated, nil
 }
 
 func (s *bookService) GenerateCategories(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
@@ -175,7 +261,30 @@ func (s *bookService) GenerateCategories(ctx context.Context, id uuid.UUID) (*do
 		return nil, err
 	}
 
-	return s.generateAndStoreCategories(ctx, book)
+	updated, err := s.generateAndStoreCategories(ctx, book)
+	if err != nil {
+		return nil, err
+	}
+
+	s.scheduleEmbeddingRefresh(book.ID)
+	return updated, nil
+}
+
+func (s *bookService) GenerateEmbeddings(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+	if s.ai == nil {
+		return nil, ai_service.ErrProviderUnavailable
+	}
+
+	book, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.generateAndStoreEmbeddings(ctx, book); err != nil {
+		return nil, err
+	}
+
+	return book, nil
 }
 
 func (s *bookService) DeleteBook(ctx context.Context, id uuid.UUID) error {
@@ -259,6 +368,47 @@ func (s *bookService) generateAndStoreCategories(ctx context.Context, book *doma
 	}
 
 	return s.repo.FindByID(ctx, book.ID)
+}
+
+func (s *bookService) generateAndStoreEmbeddings(ctx context.Context, book *domain.Book) error {
+	if s.embeddingSvc == nil {
+		return errors.New("embedding service is required")
+	}
+	if s.ai == nil {
+		return ai_service.ErrProviderUnavailable
+	}
+
+	return s.embeddingSvc.GenerateBookEmbedding(ctx, *book)
+}
+
+func (s *bookService) scheduleEmbeddingRefresh(bookID uuid.UUID) {
+	if s.ai == nil {
+		return
+	}
+
+	if _, loaded := s.embeddingJobs.LoadOrStore(bookID, struct{}{}); loaded {
+		return
+	}
+
+	go func() {
+		defer s.embeddingJobs.Delete(bookID)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
+		if err := s.refreshEmbeddings(ctx, bookID); err != nil && !errors.Is(err, ai_service.ErrProviderUnavailable) {
+			slog.Warn("book embedding refresh failed", "book_id", bookID.String(), "error", err)
+		}
+	}()
+}
+
+func (s *bookService) refreshEmbeddings(ctx context.Context, bookID uuid.UUID) error {
+	book, err := s.repo.FindByID(ctx, bookID)
+	if err != nil {
+		return err
+	}
+
+	return s.generateAndStoreEmbeddings(ctx, book)
 }
 
 func buildSummaryPrompt(title, author, description string) string {

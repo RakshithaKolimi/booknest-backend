@@ -11,6 +11,7 @@ Go backend for the BookNest bookstore platform. The service uses Gin for HTTP ro
 - User and admin order views
 - Book reviews with purchase-based eligibility checks
 - Admin book-cover image uploads backed by S3
+- AI-generated embeddings for book search/recommendation workflows
 - Swagger UI protected by basic auth
 
 ## Project structure
@@ -91,6 +92,7 @@ AWS_S3_SECRET_ACCESS_KEY=
 AI_PROVIDER=openai
 OPENAI_API_KEY=
 OPENAI_CHAT_MODEL=gpt-5.4-nano
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 Notes:
@@ -168,6 +170,7 @@ Review rules:
 - `GET /books/:id/reviews` is public and returns review items plus summary stats.
 - `POST /books/:id/reviews` requires authentication.
 - Only users with a completed purchase of the given book can create or update a review.
+- Admins can regenerate embeddings with `POST /books/:id/embeddings`; embeddings are also refreshed automatically after book, summary, and category updates.
 
 There is also a legacy `/refresh` fallback handled by the frontend for older environments, but the current backend route is `/auth/refresh`.
 

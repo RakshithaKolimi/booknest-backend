@@ -35,6 +35,7 @@ import (
 	"booknest/internal/repository"
 	"booknest/internal/service/ai_service"
 	"booknest/internal/service/author_service"
+	"booknest/internal/service/book_embedding_service"
 	"booknest/internal/service/book_service"
 	"booknest/internal/service/cart_service"
 	"booknest/internal/service/category_service"
@@ -281,6 +282,7 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	userController := controller.NewUserController(userService)
 
 	bookRepo := repository.NewBookRepository(gormdb, sqlDB)
+	bookEmbeddingRepo := repository.NewBookEmbeddingRepository(gormdb, sqlDB)
 
 	authorRepo := repository.NewAuthorRepo(gormdb)
 	authorService := author_service.NewAuthorService(authorRepo)
@@ -341,7 +343,8 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	aiController := controller.NewAIController(aiService)
 
 	// Initialise Book service after AI (best-effort summary generation on create/update).
-	bookService := book_service.NewBookService(bookRepo, categoryRepo, aiService)
+	embeddingService := book_embedding_service.New(aiService, bookEmbeddingRepo)
+	bookService := book_service.NewBookService(bookRepo, categoryRepo, embeddingService, aiService)
 	bookController := controller.NewBookController(bookService)
 
 	r := gin.Default()

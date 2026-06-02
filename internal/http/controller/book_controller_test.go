@@ -16,15 +16,16 @@ import (
 )
 
 type mockBookServiceController struct {
-	createBookFunc      func(ctx context.Context, input domain.BookInput) (*domain.Book, error)
-	getBookFunc         func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
-	listBooksFunc       func(ctx context.Context, limit, offset int) ([]domain.Book, error)
-	filterByCriteriaFun func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error)
-	queryBooksFunc      func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error)
-	updateBookFunc      func(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error)
-	generateSummaryFunc func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
-	generateCategories  func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
-	deleteBookFunc      func(ctx context.Context, id uuid.UUID) error
+	createBookFunc         func(ctx context.Context, input domain.BookInput) (*domain.Book, error)
+	getBookFunc            func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
+	listBooksFunc          func(ctx context.Context, limit, offset int) ([]domain.Book, error)
+	filterByCriteriaFun    func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error)
+	queryBooksFunc         func(ctx context.Context, filter domain.BookFilter, q domain.QueryOptions) (*domain.BookSearchResult, error)
+	updateBookFunc         func(ctx context.Context, id uuid.UUID, input domain.BookInput) (*domain.Book, error)
+	generateSummaryFunc    func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
+	generateCategories     func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
+	generateEmbeddingsFunc func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
+	deleteBookFunc         func(ctx context.Context, id uuid.UUID) error
 }
 
 func (m *mockBookServiceController) CreateBook(ctx context.Context, input domain.BookInput) (*domain.Book, error) {
@@ -72,6 +73,12 @@ func (m *mockBookServiceController) GenerateSummary(ctx context.Context, id uuid
 func (m *mockBookServiceController) GenerateCategories(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
 	if m.generateCategories != nil {
 		return m.generateCategories(ctx, id)
+	}
+	return nil, errors.New("not implemented")
+}
+func (m *mockBookServiceController) GenerateEmbeddings(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+	if m.generateEmbeddingsFunc != nil {
+		return m.generateEmbeddingsFunc(ctx, id)
 	}
 	return nil, errors.New("not implemented")
 }
@@ -260,8 +267,9 @@ func TestBookControllerDirectErrorPaths(t *testing.T) {
 		updateBookFunc: func(ctx context.Context, gotID uuid.UUID, input domain.BookInput) (*domain.Book, error) {
 			return nil, errors.New("boom")
 		},
-		generateSummaryFunc: func(ctx context.Context, gotID uuid.UUID) (*domain.Book, error) { return nil, errors.New("boom") },
-		deleteBookFunc: func(ctx context.Context, gotID uuid.UUID) error { return errors.New("boom") },
+		generateSummaryFunc:    func(ctx context.Context, gotID uuid.UUID) (*domain.Book, error) { return nil, errors.New("boom") },
+		generateEmbeddingsFunc: func(ctx context.Context, gotID uuid.UUID) (*domain.Book, error) { return nil, errors.New("boom") },
+		deleteBookFunc:         func(ctx context.Context, gotID uuid.UUID) error { return errors.New("boom") },
 	}
 	ctl := NewBookController(svc).(*bookController)
 
@@ -284,6 +292,8 @@ func TestBookControllerDirectErrorPaths(t *testing.T) {
 		{name: "update error", method: ctl.updateBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, body: `{"name":"Book","author_name":"Author","publisher_id":"` + uuid.New().String() + `"}`, code: http.StatusInternalServerError},
 		{name: "summary invalid id", method: ctl.generateSummary, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad"}} }, code: http.StatusBadRequest},
 		{name: "summary error", method: ctl.generateSummary, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusInternalServerError},
+		{name: "embeddings invalid id", method: ctl.generateEmbeddings, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad"}} }, code: http.StatusBadRequest},
+		{name: "embeddings error", method: ctl.generateEmbeddings, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusInternalServerError},
 		{name: "delete invalid id", method: ctl.deleteBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: "bad"}} }, code: http.StatusBadRequest},
 		{name: "delete error", method: ctl.deleteBook, setup: func(c *gin.Context) { c.Params = gin.Params{{Key: "id", Value: id.String()}} }, code: http.StatusInternalServerError},
 	}

@@ -10,6 +10,7 @@ const ProviderOpenAI = "openai"
 
 type Provider interface {
 	Generate(ctx context.Context, prompt string) (string, error)
+	Embed(ctx context.Context, inputs []string) ([][]float64, error)
 }
 
 type HealthStatus struct {

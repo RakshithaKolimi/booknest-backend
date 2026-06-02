@@ -29,6 +29,10 @@ func (m *mockAIService) Chat(ctx context.Context, input domain.AIChatRequest) (*
 	return m.response, nil
 }
 
+func (m *mockAIService) Embed(ctx context.Context, inputs []string) ([][]float64, error) {
+	return [][]float64{{1, 2, 3}}, nil
+}
+
 func TestAIChat(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	service := &mockAIService{response: &domain.AIChatResponse{Message: "Try The Hobbit."}}

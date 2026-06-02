@@ -16,9 +16,13 @@ migrate-up:
 	$(MIGRATE) up
 
 migrate-down:
-	echo "Remove migrations..."
-	$(MIGRATE) down
+	echo "Rolling back one migration..."
+	$(MIGRATE) down 1
 
+migrate-down-all:
+	echo "Rolling back all migrations..."
+	$(MIGRATE) down
+	
 migrate-force:
 	echo "Forcing version..."
 	$(MIGRATE) force $(VERSION)

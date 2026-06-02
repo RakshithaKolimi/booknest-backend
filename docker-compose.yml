@@ -10,13 +10,15 @@ services:
       - redis
   
   db:
-    image: "postgres:15"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    image: pgvector/pgvector:pg17
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: booknest
-      POSTGRES_DB: booknest
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: booknest
+    POSTGRES_DB: booknest
+  volumes:
+    - postgres_data:/var/lib/postgresql/data
+  ports:
+    - "5432:5432"
 
   redis:
     image: "redis:7-alpine"

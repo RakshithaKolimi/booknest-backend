@@ -12,21 +12,27 @@ import (
 )
 
 const (
-	DefaultOpenAIBaseURL = "https://api.openai.com/v1"
-	DefaultOpenAIModel   = "gpt-5.4-nano"
+	DefaultOpenAIBaseURL        = "https://api.openai.com/v1"
+	DefaultOpenAIModel          = "gpt-5.4-nano"
+	DefaultOpenAIEmbeddingModel = "text-embedding-3-small"
 )
 
 type OpenAIConfig struct {
-	APIKey  string
-	Model   string
+	APIKey         string
+	Model          string
+	EmbeddingModel string
 }
 
 func (cfg OpenAIConfig) withDefaults() OpenAIConfig {
 	cfg.APIKey = strings.TrimSpace(cfg.APIKey)
 	cfg.Model = strings.TrimSpace(cfg.Model)
+	cfg.EmbeddingModel = strings.TrimSpace(cfg.EmbeddingModel)
 
 	if cfg.Model == "" {
 		cfg.Model = DefaultOpenAIModel
+	}
+	if cfg.EmbeddingModel == "" {
+		cfg.EmbeddingModel = DefaultOpenAIEmbeddingModel
 	}
 
 	return cfg
@@ -43,10 +49,11 @@ func (cfg OpenAIConfig) Validate() error {
 }
 
 type OpenAIProvider struct {
-	apiKey  string
-	model   string
-	baseURL string
-	client  openai.Client
+	apiKey         string
+	model          string
+	embeddingModel string
+	baseURL        string
+	client         openai.Client
 }
 
 func NewOpenAIProvider(cfg OpenAIConfig) (*OpenAIProvider, error) {
@@ -56,9 +63,10 @@ func NewOpenAIProvider(cfg OpenAIConfig) (*OpenAIProvider, error) {
 	}
 
 	provider := OpenAIProvider{
-		apiKey:  cfg.APIKey,
-		model:   cfg.Model,
-		client:  openai.NewClient(option.WithAPIKey(cfg.APIKey)),
+		apiKey:         cfg.APIKey,
+		model:          cfg.Model,
+		embeddingModel: cfg.EmbeddingModel,
+		client:         openai.NewClient(option.WithAPIKey(cfg.APIKey)),
 	}
 
 	return &provider, nil
@@ -83,4 +91,46 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, e
 
 	// Extract and return the generated text
 	return res.OutputText(), nil
+}
+
+func (p *OpenAIProvider) Embed(ctx context.Context, inputs []string) ([][]float64, error) {
+	if len(inputs) == 0 {
+		return nil, errors.New("inputs are required")
+	}
+
+	trimmed := make([]string, 0, len(inputs))
+	for _, input := range inputs {
+		value := strings.TrimSpace(input)
+		if value == "" {
+			return nil, errors.New("inputs must not contain empty strings")
+		}
+		trimmed = append(trimmed, value)
+	}
+
+	res, err := p.client.Embeddings.New(ctx, openai.EmbeddingNewParams{
+		Model: p.embeddingModel,
+		Input: openai.EmbeddingNewParamsInputUnion{
+			OfArrayOfStrings: trimmed,
+		},
+		EncodingFormat: openai.EmbeddingNewParamsEncodingFormatFloat,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("send OpenAI embedding request: %w", err)
+	}
+
+	vectors := make([][]float64, len(res.Data))
+	for _, embedding := range res.Data {
+		if embedding.Index < 0 || int(embedding.Index) >= len(vectors) {
+			return nil, fmt.Errorf("OpenAI embedding returned out-of-range index %d", embedding.Index)
+		}
+		vectors[int(embedding.Index)] = embedding.Embedding
+	}
+
+	for i, vector := range vectors {
+		if len(vector) == 0 {
+			return nil, fmt.Errorf("OpenAI embedding response missing vector at index %d", i)
+		}
+	}
+
+	return vectors, nil
 }

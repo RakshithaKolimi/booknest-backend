@@ -15,8 +15,9 @@ func LoadConfigFromEnv() (Config, error) {
 	cfg := Config{
 		Provider: strings.ToLower(strings.TrimSpace(os.Getenv("AI_PROVIDER"))),
 		OpenAI: OpenAIConfig{
-			APIKey:  strings.TrimSpace(os.Getenv("OPENAI_API_KEY")),
-			Model:   strings.TrimSpace(os.Getenv("OPENAI_CHAT_MODEL")),
+			APIKey:         strings.TrimSpace(os.Getenv("OPENAI_API_KEY")),
+			Model:          strings.TrimSpace(os.Getenv("OPENAI_CHAT_MODEL")),
+			EmbeddingModel: strings.TrimSpace(os.Getenv("OPENAI_EMBEDDING_MODEL")),
 		},
 	}
 

@@ -65,6 +65,10 @@ type mockBookRepository struct {
 	findByIDFunc func(ctx context.Context, id uuid.UUID) (*domain.Book, error)
 }
 
+func (m *mockBookRepository) ListBooksWithoutEmbeddings(ctx context.Context, limit, offset int) ([]domain.Book, error) {
+	return nil, nil
+}
+
 func (m *mockBookRepository) Create(ctx context.Context, book *domain.Book) error { return nil }
 func (m *mockBookRepository) CreateWithRelations(ctx context.Context, input domain.BookInput) (*domain.Book, error) {
 	return nil, nil
@@ -83,6 +87,9 @@ func (m *mockBookRepository) UpdateWithRelations(ctx context.Context, id uuid.UU
 	return nil, nil
 }
 func (m *mockBookRepository) ReplaceCategories(ctx context.Context, bookID uuid.UUID, categoryIDs []uuid.UUID) error {
+	return nil
+}
+func (m *mockBookRepository) UpsertEmbeddings(ctx context.Context, embeddings *domain.BookEmbedding) error {
 	return nil
 }
 func (m *mockBookRepository) Delete(ctx context.Context, id uuid.UUID) error { return nil }

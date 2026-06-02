@@ -127,6 +127,41 @@ func (c *bookController) generateCategories(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, book)
 }
 
+// generateEmbeddings godoc
+// @Summary      Generate book embeddings
+// @Description  Generates and stores AI embeddings for a book (admin only)
+// @Tags         Books
+// @Produce      json
+// @Param        id  path  string  true  "Book ID"
+// @Success      200  {object}  domain.Book
+// @Failure      400  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Failure      503  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Security     BearerAuth
+// @Router       /books/{id}/embeddings [post]
+func (c *bookController) generateEmbeddings(ctx *gin.Context) {
+	id, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	book, err := c.service.GenerateEmbeddings(ctx, id)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, ai_service.ErrProviderUnavailable) {
+			status = http.StatusServiceUnavailable
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
+			status = http.StatusNotFound
+		}
+		ctx.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, book)
+}
+
 // getBook godoc
 // @Summary      Get book by ID
 // @Description  Fetches a single book by its ID
@@ -219,7 +254,7 @@ func (c *bookController) queryBooks(ctx *gin.Context) {
 		cursor = &v
 	}
 
-	// Get the filter input 
+	// Get the filter input
 	filter := domain.BookFilter{}
 	if err := ctx.ShouldBindQuery(&filter); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
