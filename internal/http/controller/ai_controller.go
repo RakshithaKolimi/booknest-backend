@@ -8,6 +8,7 @@ import (
 
 	"booknest/internal/domain"
 	"booknest/internal/http/routes"
+	"booknest/internal/middleware"
 	aipkg "booknest/internal/pkg/ai"
 	"booknest/internal/service/ai_service"
 )
@@ -25,12 +26,17 @@ func NewAIController(service ...domain.AIService) *aiController {
 }
 
 func (c *aiController) RegisterRoutes(r gin.IRouter) {
-	RegisterAIRoutes(r, c)
+	RegisterAIRoutes(r, getJWTConfig(), c)
 }
 
-func RegisterAIRoutes(r gin.IRouter, controller *aiController) {
+func RegisterAIRoutes(r gin.IRouter, jwtConfig middleware.JWTConfig, controller *aiController) {
 	r.GET(routes.AIHealthRoute, controller.Health)
-	r.POST(routes.AIChatRoute, controller.Chat)
+
+	user := r.Group("/ai")
+	user.Use(middleware.JWTAuthMiddleware(jwtConfig))
+	{
+		user.POST(routes.AIChatRoute, controller.Chat)
+	}
 }
 
 func (controller *aiController) Health(c *gin.Context) {
@@ -52,8 +58,15 @@ func (controller *aiController) Health(c *gin.Context) {
 // @Success      200  {object}  domain.AIChatResponse
 // @Failure      400  {object}  map[string]string
 // @Failure      503  {object}  map[string]string
+// @Security     BearerAuth
 // @Router       /ai/chat [post]
 func (controller *aiController) Chat(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	if controller.service == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": ai_service.ErrProviderUnavailable.Error()})
 		return
@@ -69,7 +82,7 @@ func (controller *aiController) Chat(c *gin.Context) {
 		return
 	}
 
-	response, err := controller.service.Chat(c, input)
+	response, err := controller.service.Chat(c, input, userID.String())
 	if err != nil {
 		status := http.StatusInternalServerError
 		if err.Error() == "message is required" {

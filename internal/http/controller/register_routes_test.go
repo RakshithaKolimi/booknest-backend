@@ -42,7 +42,7 @@ func TestRegisterRouteHelpers(t *testing.T) {
 	RegisterOrderRoutes(engine, jwtConfig, &orderController{})
 	RegisterReviewRoutes(engine, jwtConfig, &reviewController{})
 	RegisterImageRoutes(engine, jwtConfig, &imageController{})
-	RegisterAIRoutes(engine, &aiController{})
+	RegisterAIRoutes(engine, jwtConfig, &aiController{})
 
 	expected := []struct {
 		method string

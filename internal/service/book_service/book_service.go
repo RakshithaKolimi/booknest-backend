@@ -307,7 +307,7 @@ func (s *bookService) generateAndStoreSummary(ctx context.Context, book *domain.
 	description := strings.TrimSpace(book.Description)
 
 	prompt := buildSummaryPrompt(title, author, description)
-	resp, err := s.ai.Chat(ctx, domain.AIChatRequest{Message: prompt})
+	resp, err := s.ai.Chat(ctx, domain.AIChatRequest{Message: prompt}, "")
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +333,7 @@ func (s *bookService) generateAndStoreCategories(ctx context.Context, book *doma
 	summary := strings.TrimSpace(book.Summary)
 
 	prompt := buildCategoriesPrompt(title, author, description, summary)
-	resp, err := s.ai.Chat(ctx, domain.AIChatRequest{Message: prompt})
+	resp, err := s.ai.Chat(ctx, domain.AIChatRequest{Message: prompt}, "")
 	if err != nil {
 		return nil, err
 	}

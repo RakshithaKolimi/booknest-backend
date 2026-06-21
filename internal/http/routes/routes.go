@@ -6,7 +6,7 @@ package routes
 const (
 	HealthRoute   = "/health"
 	AIHealthRoute = "/ai/health"
-	AIChatRoute   = "/ai/chat"
+	AIChatRoute   = "/chat"
 
 	BooksRoute            = "/books"
 	BookRoute             = "/book"

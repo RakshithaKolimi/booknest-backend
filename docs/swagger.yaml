@@ -790,6 +790,10 @@ definitions:
     properties:
       message:
         type: string
+      references:
+        items:
+          $ref: '#/definitions/Book'
+        type: array
     type: object
   domain.OrderStatus:
     enum:
@@ -931,6 +935,8 @@ paths:
             additionalProperties:
               type: string
             type: object
+      security:
+      - BearerAuth: []
       summary: Chat with AI
       tags:
       - AI
@@ -1789,6 +1795,41 @@ paths:
       summary: Filter books
       tags:
       - Books
+  /books/recommend:
+    get:
+      description: Returns books recommended for the authenticated user based on their
+        purchase history using semantic embeddings
+      parameters:
+      - description: Number of recommendations (default 10, max 50)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/Book'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Recommend books
+      tags:
+      - Books
   /books/search:
     get:
       description: Supports offset and cursor based pagination with catalog filters
@@ -1825,6 +1866,49 @@ paths:
               type: string
             type: object
       summary: Query books with filters and pagination
+      tags:
+      - Books
+  /books/semantic-search:
+    get:
+      description: Searches books by natural language query using vector similarity
+      parameters:
+      - description: Natural language search query
+        in: query
+        name: q
+        required: true
+        type: string
+      - description: Number of results (default 10, max 50)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/Book'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Semantic book search
       tags:
       - Books
   /cart:

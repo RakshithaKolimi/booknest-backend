@@ -7,90 +7,200 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"booknest/internal/domain"
 	"booknest/internal/service/ai_service"
 )
 
 type mockAIService struct {
-	response *domain.AIChatResponse
-	err      error
-	input    domain.AIChatRequest
+	chatFunc  func(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error)
+	embedFunc func(ctx context.Context, inputs []string) ([][]float64, error)
 }
 
-func (m *mockAIService) Chat(ctx context.Context, input domain.AIChatRequest) (*domain.AIChatResponse, error) {
-	m.input = input
-	if m.err != nil {
-		return nil, m.err
+func (m *mockAIService) Chat(ctx context.Context, request domain.AIChatRequest, userID string) (*domain.AIChatResponse, error) {
+	if m.chatFunc != nil {
+		return m.chatFunc(ctx, request, userID)
 	}
-	return m.response, nil
+	return nil, errors.New("not implemented")
 }
 
 func (m *mockAIService) Embed(ctx context.Context, inputs []string) ([][]float64, error) {
-	return [][]float64{{1, 2, 3}}, nil
+	if m.embedFunc != nil {
+		return m.embedFunc(ctx, inputs)
+	}
+	return nil, errors.New("not implemented")
 }
 
-func TestAIChat(t *testing.T) {
+func TestAIControllerChatSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	service := &mockAIService{response: &domain.AIChatResponse{Message: "Try The Hobbit."}}
 
-	engine := gin.New()
-	NewAIController(service).RegisterRoutes(engine)
+	userID := uuid.New()
+	book := domain.Book{ID: uuid.New(), Name: "Dune"}
+	service := &mockAIService{
+		chatFunc: func(ctx context.Context, input domain.AIChatRequest, gotUserID string) (*domain.AIChatResponse, error) {
+			if gotUserID != userID.String() {
+				t.Fatalf("expected user ID %s, got %s", userID, gotUserID)
+			}
+			if input.Message != "find Dune" {
+				t.Fatalf("expected sanitized message, got %q", input.Message)
+			}
+			return &domain.AIChatResponse{
+				Message:    "Here is the book I found.",
+				References: []domain.Book{book},
+			}, nil
+		},
+	}
+	controller := NewAIController(service)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(`{"message":"recommend fantasy"}`))
-	req.Header.Set("Content-Type", "application/json")
-	engine.ServeHTTP(w, req)
+	c, _ := gin.CreateTestContext(w)
+	c.Set("user_id", userID.String())
+	c.Request = httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(`{"message":"  find   Dune  "}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	controller.Chat(c)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var got domain.AIChatResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-		t.Fatalf("decode response: %v", err)
+	var response domain.AIChatResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
-	if got.Message != "Try The Hobbit." {
-		t.Fatalf("unexpected chat response: %+v", got)
+	if response.Message != "Here is the book I found." {
+		t.Fatalf("unexpected response message: %q", response.Message)
 	}
-	if service.input.Message != "recommend fantasy" {
-		t.Fatalf("expected request to reach service, got %+v", service.input)
-	}
-}
-
-func TestAIChatValidationError(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	service := &mockAIService{err: errors.New("message is required")}
-
-	engine := gin.New()
-	NewAIController(service).RegisterRoutes(engine)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(`{"message":""}`))
-	req.Header.Set("Content-Type", "application/json")
-	engine.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request, got %d", w.Code)
+	if len(response.References) != 1 || response.References[0].ID != book.ID {
+		t.Fatalf("unexpected references: %+v", response.References)
 	}
 }
 
-func TestAIChatProviderUnavailable(t *testing.T) {
+func TestAIControllerChatValidationErrors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	service := &mockAIService{err: ai_service.ErrProviderUnavailable}
 
-	engine := gin.New()
-	NewAIController(service).RegisterRoutes(engine)
+	tests := []struct {
+		name  string
+		setup func(*gin.Context)
+		body  string
+		want  int
+	}{
+		{
+			name: "missing user ID",
+			body: `{"message":"hello"}`,
+			want: http.StatusUnauthorized,
+		},
+		{
+			name: "bad JSON",
+			setup: func(c *gin.Context) {
+				c.Set("user_id", uuid.New().String())
+			},
+			body: `{`,
+			want: http.StatusBadRequest,
+		},
+		{
+			name: "sanitizer rejects oversized message",
+			setup: func(c *gin.Context) {
+				c.Set("user_id", uuid.New().String())
+			},
+			body: `{"message":"` + strings.Repeat("a", defaultMaxInputLength+1) + `"}`,
+			want: http.StatusBadRequest,
+		},
+	}
 
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(`{"message":"hello"}`))
-	req.Header.Set("Content-Type", "application/json")
-	engine.ServeHTTP(w, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := NewAIController(&mockAIService{})
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			if tt.setup != nil {
+				tt.setup(c)
+			}
+			c.Request = httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(tt.body))
+			c.Request.Header.Set("Content-Type", "application/json")
 
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503 Service Unavailable, got %d", w.Code)
+			controller.Chat(c)
+
+			if w.Code != tt.want {
+				t.Fatalf("expected %d, got %d: %s", tt.want, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestAIControllerChatServiceUnavailable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name       string
+		controller *aiController
+	}{
+		{
+			name:       "missing service",
+			controller: NewAIController(),
+		},
+		{
+			name: "provider unavailable error",
+			controller: NewAIController(&mockAIService{
+				chatFunc: func(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error) {
+					return nil, ai_service.ErrProviderUnavailable
+				},
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Set("user_id", uuid.New().String())
+			c.Request = httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(`{"message":"hello"}`))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			tt.controller.Chat(c)
+
+			if w.Code != http.StatusServiceUnavailable {
+				t.Fatalf("expected 503, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestAIControllerChatServiceErrorMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "message required", err: errors.New("message is required"), want: http.StatusBadRequest},
+		{name: "unknown service error", err: errors.New("provider failed"), want: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := NewAIController(&mockAIService{
+				chatFunc: func(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error) {
+					return nil, tt.err
+				},
+			})
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Set("user_id", uuid.New().String())
+			c.Request = httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(`{"message":"hello"}`))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			controller.Chat(c)
+
+			if w.Code != tt.want {
+				t.Fatalf("expected %d, got %d: %s", tt.want, w.Code, w.Body.String())
+			}
+		})
 	}
 }
