@@ -383,7 +383,7 @@ func TestAIServiceChatSemanticSearchReturnsReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	expectedMsg := `- Dune by Frank Herbert`
+	expectedMsg := "📚 **Dune**\n👤 Author: Frank Herbert"
 	if response.Message != expectedMsg {
 		t.Fatalf("unexpected response message:\ngot:  %q\nwant:%s", response.Message, expectedMsg)
 	}
