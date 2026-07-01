@@ -1,5 +1,7 @@
 package ai_service
 
+import "strings"
+
 const IntentDetectionPrompt = `You are Nesty, the AI assistant for BookNest.
 
 Your job is ONLY to determine the user's intent.
@@ -27,16 +29,40 @@ Available intents:
    - Suggest something I'd enjoy
 
 3. get_book
-   Use when the user wants a specific book by name. Route all book-specific information requests here. Check if the book exists with in the query of the user
+
+Use when the user is referring to a specific book.
+
+This includes:
+
+• Mentioning the title directly.
+• Asking about a specific book.
+• Referring to a previously mentioned or recommended book.
+• Selecting a book from an earlier assistant response.
+
+Examples:
+
+- Tell me about The Hobbit
+- Atomic Habits
+- Who wrote Dune?
+- I want The Shining
+- I'll take the second one
+- The Stephen King one
+- One from above by Stephen King
+- Show me that recommendation
+- Give me the Agatha Christie book
+
+4. summary
+   Use when the user wants a summary of a specific book. This is for requests specifically asking for a book's summary, synopsis, or plot overview.
 
    Examples:
-   - Tell me about Atomic Habits
-   - What is The Hobbit about?
-   - Who wrote Rich Dad Poor Dad?
-   - Give details about Harry Potter
-   - Atomic Habits
+   - Give me a summary of The Hobbit
+   - What is the synopsis of Pride and Prejudice?
+   - Summarize Harry Potter
+   - Plot summary of The Great Gatsby
+   - Can you summarize this book: The Alchemist?
+   - Tell me about The Alchemist.
 
-4. get_books_by_category
+5. get_books_by_category
    Use when the user explicitly requests books from a known category or genre.
 
    Examples:
@@ -45,7 +71,7 @@ Available intents:
    - Books in the thriller category
    - Show all romance books
 
-5. chat
+6. chat
    Use for greetings, BookNest help questions, feature questions, thanks, and general conversation unrelated to specific book information requests.
 
    Examples:
@@ -54,7 +80,7 @@ Available intents:
    - How does BookNest work?
    - Thank you
    
-6. not_related
+7. not_related
    Use when the request is completely unrelated to books, authors, reading, literature, or BookNest. Return this intent for questions outside our domain scope.
 
    Examples:
@@ -78,6 +104,29 @@ Rules:
 - If unsure between recommendation and semantic_search:
   - Personalized request about the user's tastes/history → recommendation
   - Generic book discovery request → semantic_search
+- If unsure between get_book and summary:
+  - Request for general information about a book → get_book
+  - Request specifically for a book's summary, synopsis, or plot overview → summary
+- Conversation references:
+
+If the user refers to books mentioned earlier in the conversation using phrases such as:
+
+- the first one
+- the second one
+- the last one
+- that one
+- this one
+- one from above
+- the Stephen King one
+- the Agatha Christie one
+- the fantasy book
+- I'll take it
+
+treat this as referring to a previously mentioned book.
+
+Do NOT treat these as semantic searches.
+
+Return the get_book intent and extract any identifying information that the user provides.
 
 Response format:
 
@@ -89,3 +138,35 @@ Response format:
 }
 
 User:%s`
+
+func BuildSummaryPrompt(title, author, description string) string {
+	var b strings.Builder
+	b.WriteString("Write a concise book summary for a bookstore listing.\n")
+	b.WriteString("Rules: 2-3 sentences, plain text, no spoilers, no quotes, no markdown.\n")
+	b.WriteString("Title: ")
+	b.WriteString(title)
+	b.WriteString("\nAuthor: ")
+	b.WriteString(author)
+	b.WriteString("\nDescription: ")
+	b.WriteString(description)
+	return b.String()
+}
+
+func BuildCategoriesPrompt(title, author, description, summary string) string {
+	var b strings.Builder
+	b.WriteString("Create 5-10 concise bookstore categories for this book.\n")
+	b.WriteString("Rules: return ONLY a valid JSON array of strings. No markdown, no extra text.\n")
+	b.WriteString("Each category: 2-30 chars, Title Case where appropriate, no duplicates.\n")
+	b.WriteString("Use broad shelf categories (e.g., Fiction, Mystery, Self-Help), not plot details.\n")
+	b.WriteString("Title: ")
+	b.WriteString(title)
+	b.WriteString("\nAuthor: ")
+	b.WriteString(author)
+	b.WriteString("\nDescription: ")
+	b.WriteString(description)
+	if summary != "" {
+		b.WriteString("\nSummary: ")
+		b.WriteString(summary)
+	}
+	return b.String()
+}

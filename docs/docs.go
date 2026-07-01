@@ -3753,6 +3753,9 @@ const docTemplate = `{
                 },
                 "prompt": {
                     "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
                 }
             }
         },
@@ -3767,6 +3770,9 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/Book"
                     }
+                },
+                "session_id": {
+                    "type": "string"
                 }
             }
         },

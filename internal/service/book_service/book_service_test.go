@@ -337,8 +337,9 @@ func TestBookServiceQueryBooksPassThrough(t *testing.T) {
 }
 
 type mockAIService struct {
-	chatFunc  func(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error)
-	embedFunc func(ctx context.Context, inputs []string) ([][]float64, error)
+	chatFunc     func(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error)
+	generateFunc func(ctx context.Context, prompt string) (string, error)
+	embedFunc    func(ctx context.Context, inputs []string) ([][]float64, error)
 }
 
 func (m *mockAIService) Chat(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error) {
@@ -346,6 +347,13 @@ func (m *mockAIService) Chat(ctx context.Context, input domain.AIChatRequest, us
 		return m.chatFunc(ctx, input, userID)
 	}
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockAIService) Generate(ctx context.Context, prompt string) (string, error) {
+	if m.generateFunc != nil {
+		return m.generateFunc(ctx, prompt)
+	}
+	return "", errors.New("not implemented")
 }
 
 func (m *mockAIService) Embed(ctx context.Context, inputs []string) ([][]float64, error) {
@@ -381,14 +389,11 @@ func TestBookServiceGenerateSummaryStoresResult(t *testing.T) {
 	}
 
 	ai := &mockAIService{
-		chatFunc: func(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error) {
-			if input.Message == "" {
+		generateFunc: func(ctx context.Context, prompt string) (string, error) {
+			if prompt == "" {
 				t.Fatalf("expected prompt to be set")
 			}
-			if userID != "" {
-				t.Fatalf("expected internal summary generation to use empty user id, got %q", userID)
-			}
-			return &domain.AIChatResponse{Message: "Generated summary."}, nil
+			return "Generated summary.", nil
 		},
 	}
 
@@ -429,11 +434,8 @@ func TestBookServiceGetBookGeneratesSummaryWhenMissing(t *testing.T) {
 	}
 
 	ai := &mockAIService{
-		chatFunc: func(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error) {
-			if userID != "" {
-				t.Fatalf("expected internal summary generation to use empty user id, got %q", userID)
-			}
-			return &domain.AIChatResponse{Message: "Generated summary."}, nil
+		generateFunc: func(ctx context.Context, prompt string) (string, error) {
+			return "Generated summary.", nil
 		},
 	}
 

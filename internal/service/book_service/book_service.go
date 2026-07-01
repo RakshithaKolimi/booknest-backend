@@ -306,13 +306,13 @@ func (s *bookService) generateAndStoreSummary(ctx context.Context, book *domain.
 	title := strings.TrimSpace(book.Name)
 	description := strings.TrimSpace(book.Description)
 
-	prompt := buildSummaryPrompt(title, author, description)
-	resp, err := s.ai.Chat(ctx, domain.AIChatRequest{Message: prompt}, "")
+	prompt := ai_service.BuildSummaryPrompt(title, author, description)
+	summary, err := s.ai.Generate(ctx, prompt)
 	if err != nil {
 		return nil, err
 	}
 
-	book.Summary = strings.TrimSpace(resp.Message)
+	book.Summary = strings.TrimSpace(summary)
 	if err := s.repo.Update(ctx, book); err != nil {
 		return nil, err
 	}
@@ -332,13 +332,13 @@ func (s *bookService) generateAndStoreCategories(ctx context.Context, book *doma
 	description := strings.TrimSpace(book.Description)
 	summary := strings.TrimSpace(book.Summary)
 
-	prompt := buildCategoriesPrompt(title, author, description, summary)
-	resp, err := s.ai.Chat(ctx, domain.AIChatRequest{Message: prompt}, "")
+	prompt := ai_service.BuildCategoriesPrompt(title, author, description, summary)
+	response, err := s.ai.Generate(ctx, prompt)
 	if err != nil {
 		return nil, err
 	}
 
-	categoryNames, err := parseCategoryNames(resp.Message)
+	categoryNames, err := parseCategoryNames(response)
 	if err != nil {
 		return nil, err
 	}
@@ -415,38 +415,6 @@ func (s *bookService) refreshEmbeddings(ctx context.Context, bookID uuid.UUID) e
 	}
 
 	return s.generateAndStoreEmbeddings(ctx, book)
-}
-
-func buildSummaryPrompt(title, author, description string) string {
-	var b strings.Builder
-	b.WriteString("Write a concise book summary for a bookstore listing.\n")
-	b.WriteString("Rules: 2-3 sentences, plain text, no spoilers, no quotes, no markdown.\n")
-	b.WriteString("Title: ")
-	b.WriteString(title)
-	b.WriteString("\nAuthor: ")
-	b.WriteString(author)
-	b.WriteString("\nDescription: ")
-	b.WriteString(description)
-	return b.String()
-}
-
-func buildCategoriesPrompt(title, author, description, summary string) string {
-	var b strings.Builder
-	b.WriteString("Create 5-10 concise bookstore categories for this book.\n")
-	b.WriteString("Rules: return ONLY a valid JSON array of strings. No markdown, no extra text.\n")
-	b.WriteString("Each category: 2-30 chars, Title Case where appropriate, no duplicates.\n")
-	b.WriteString("Use broad shelf categories (e.g., Fiction, Mystery, Self-Help), not plot details.\n")
-	b.WriteString("Title: ")
-	b.WriteString(title)
-	b.WriteString("\nAuthor: ")
-	b.WriteString(author)
-	b.WriteString("\nDescription: ")
-	b.WriteString(description)
-	if summary != "" {
-		b.WriteString("\nSummary: ")
-		b.WriteString(summary)
-	}
-	return b.String()
 }
 
 func (s *bookService) RecommendBooks(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Book, error) {

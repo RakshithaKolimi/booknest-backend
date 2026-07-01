@@ -3751,6 +3751,9 @@
                 },
                 "prompt": {
                     "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
                 }
             }
         },
@@ -3765,6 +3768,9 @@
                     "items": {
                         "$ref": "#/definitions/Book"
                     }
+                },
+                "session_id": {
+                    "type": "string"
                 }
             }
         },

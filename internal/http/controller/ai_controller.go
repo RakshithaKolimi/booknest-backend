@@ -88,6 +88,12 @@ func (controller *aiController) Chat(c *gin.Context) {
 		if err.Error() == "message is required" {
 			status = http.StatusBadRequest
 		}
+		if errors.Is(err, ai_service.ErrInvalidSessionID) {
+			status = http.StatusBadRequest
+		}
+		if errors.Is(err, ai_service.ErrForbiddenSession) {
+			status = http.StatusForbidden
+		}
 		if errors.Is(err, ai_service.ErrProviderUnavailable) {
 			status = http.StatusServiceUnavailable
 		}

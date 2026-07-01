@@ -339,7 +339,8 @@ func SetupServer(dbpool *pgxpool.Pool) (*gin.Engine, error) {
 	if err != nil {
 		slog.Warn("AI provider is not configured", "error", err)
 	}
-	aiService := ai_service.NewAIService(aiProvider,bookRepo, bookEmbeddingRepo, orderRepo)
+	chatRepo := repository.NewChatRepo(dbpool)
+	aiService := ai_service.NewAIService(aiProvider, bookRepo, bookEmbeddingRepo, orderRepo, chatRepo)
 	aiController := controller.NewAIController(aiService)
 
 	// Initialise Book service after AI (best-effort summary generation on create/update).

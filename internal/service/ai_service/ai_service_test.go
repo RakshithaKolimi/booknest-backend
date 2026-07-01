@@ -3,11 +3,14 @@ package ai_service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"booknest/internal/domain"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type mockProvider struct {
@@ -53,15 +56,20 @@ type mockBookEmbeddingRepository struct {
 	excludeIDs []uuid.UUID
 }
 
-func (m *mockBookEmbeddingRepository) CreateEmbedding(ctx context.Context, embedding *domain.BookEmbedding) error {
+func (m *mockBookEmbeddingRepository) Create(ctx context.Context, book *domain.Book) error {
 	return nil
 }
 
-func (m *mockBookEmbeddingRepository) UpdateEmbedding(ctx context.Context, embedding *domain.BookEmbedding) error {
-	return nil
+func (m *mockBookEmbeddingRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Book, error) {
+	for _, b := range m.books {
+		if b.ID == id {
+			return &b, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
-func (m *mockBookEmbeddingRepository) GetEmbedding(ctx context.Context, bookID uuid.UUID) (*domain.BookEmbedding, error) {
+func (m *mockBookEmbeddingRepository) List(ctx context.Context, limit, offset int) ([]domain.Book, error) {
 	return nil, nil
 }
 
@@ -78,6 +86,23 @@ func (m *mockBookEmbeddingRepository) SearchNearestBooks(ctx context.Context, qu
 	m.limit = limit
 	m.excludeIDs = append([]uuid.UUID(nil), excludeIDs...)
 	return m.books, nil
+}
+
+func (m *mockBookEmbeddingRepository) CreateEmbedding(ctx context.Context, embedding *domain.BookEmbedding) error {
+	return nil
+}
+
+func (m *mockBookEmbeddingRepository) UpdateEmbedding(ctx context.Context, embedding *domain.BookEmbedding) error {
+	return nil
+}
+
+func (m *mockBookEmbeddingRepository) GetEmbedding(ctx context.Context, bookID uuid.UUID) (*domain.BookEmbedding, error) {
+	for _, e := range m.embeddings {
+		if e.BookID == bookID {
+			return &e, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
 }
 
 type mockOrderRepository struct {
@@ -176,6 +201,40 @@ func (m *mockBookRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+type mockChatRepository struct {
+	session       *domain.ChatSession
+	messages      []domain.ChatMessage
+	savedMessages []domain.ChatMessage
+	createdTitle  string
+}
+
+func (m *mockChatRepository) CreateSession(ctx context.Context, userID uuid.UUID, title string) (*domain.ChatSession, error) {
+	m.createdTitle = title
+	if m.session == nil {
+		m.session = &domain.ChatSession{
+			ID:        uuid.New(),
+			UserID:    userID,
+			Title:     title,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+	}
+	return m.session, nil
+}
+
+func (m *mockChatRepository) SaveMessage(ctx context.Context, msg domain.ChatMessage) error {
+	m.savedMessages = append(m.savedMessages, msg)
+	return nil
+}
+
+func (m *mockChatRepository) GetMessages(ctx context.Context, sessionID uuid.UUID, limit int) ([]domain.ChatMessage, error) {
+	return m.messages, nil
+}
+
+func (m *mockChatRepository) GetSession(ctx context.Context, sessionID uuid.UUID) (*domain.ChatSession, error) {
+	return m.session, nil
+}
+
 func TestAIServiceChat(t *testing.T) {
 	provider := &mockProvider{replies: []string{`{"tool":"chat"}`, "A useful answer."}}
 	service := NewAIService(provider, nil, nil, nil)
@@ -192,6 +251,77 @@ func TestAIServiceChat(t *testing.T) {
 	}
 }
 
+func TestAIServiceChatCreatesSessionAndSavesExchange(t *testing.T) {
+	userID := uuid.New()
+	sessionID := uuid.New()
+	provider := &mockProvider{replies: []string{`{"tool":"chat"}`, "A useful answer."}}
+	chatRepo := &mockChatRepository{
+		session: &domain.ChatSession{ID: sessionID, UserID: userID},
+	}
+	service := NewAIService(provider, nil, nil, nil, chatRepo)
+
+	response, err := service.Chat(context.Background(), domain.AIChatRequest{Message: "recommend fantasy books"}, userID.String())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if response.SessionID != sessionID.String() {
+		t.Fatalf("expected session ID %s, got %q", sessionID, response.SessionID)
+	}
+	if chatRepo.createdTitle != "recommend fantasy books" {
+		t.Fatalf("expected session title from first message, got %q", chatRepo.createdTitle)
+	}
+	if len(chatRepo.savedMessages) != 2 {
+		t.Fatalf("expected user and assistant messages to be saved, got %+v", chatRepo.savedMessages)
+	}
+	if chatRepo.savedMessages[0].Role != domain.ChatMessageRoleUser || chatRepo.savedMessages[0].Content != "recommend fantasy books" {
+		t.Fatalf("unexpected saved user message: %+v", chatRepo.savedMessages[0])
+	}
+	if chatRepo.savedMessages[1].Role != domain.ChatMessageRoleAssistant || chatRepo.savedMessages[1].Content != "A useful answer." {
+		t.Fatalf("unexpected saved assistant message: %+v", chatRepo.savedMessages[1])
+	}
+}
+
+func TestAIServiceChatUsesExistingSessionHistory(t *testing.T) {
+	userID := uuid.New()
+	sessionID := uuid.New()
+	provider := &mockProvider{replies: []string{`{"tool":"chat"}`, "Try The Blade Itself."}}
+	chatRepo := &mockChatRepository{
+		session: &domain.ChatSession{ID: sessionID, UserID: userID},
+		messages: []domain.ChatMessage{
+			{SessionID: sessionID, Role: domain.ChatMessageRoleUser, Content: "recommend fantasy books"},
+			{SessionID: sessionID, Role: domain.ChatMessageRoleAssistant, Content: "Try The Hobbit."},
+		},
+	}
+	service := NewAIService(provider, nil, nil, nil, chatRepo)
+
+	response, err := service.Chat(context.Background(), domain.AIChatRequest{
+		SessionID: sessionID.String(),
+		Message:   "something darker",
+	}, userID.String())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if response.SessionID != sessionID.String() {
+		t.Fatalf("expected session ID %s, got %q", sessionID, response.SessionID)
+	}
+	if len(provider.prompts) != 2 {
+		t.Fatalf("expected intent and chat prompts, got %+v", provider.prompts)
+	}
+	for _, want := range []string{
+		"Conversation so far:",
+		"user: recommend fantasy books",
+		"assistant: Try The Hobbit.",
+		"user: something darker",
+	} {
+		if !strings.Contains(provider.prompts[1], want) {
+			t.Fatalf("expected chat prompt to contain %q, got %q", want, provider.prompts[1])
+		}
+	}
+	if len(chatRepo.savedMessages) != 2 || chatRepo.savedMessages[0].Content != "something darker" {
+		t.Fatalf("expected follow-up exchange to be saved, got %+v", chatRepo.savedMessages)
+	}
+}
+
 func TestAIServiceChatUsesPromptAlias(t *testing.T) {
 	provider := &mockProvider{replies: []string{`{"tool":"chat"}`, "A useful answer."}}
 	service := NewAIService(provider, nil, nil, nil)
@@ -202,6 +332,23 @@ func TestAIServiceChatUsesPromptAlias(t *testing.T) {
 	}
 	if len(provider.prompts) != 2 || provider.prompts[1] != "legacy prompt" {
 		t.Fatalf("expected prompt alias, got %+v", provider.prompts)
+	}
+}
+
+func TestAIServiceGenerate(t *testing.T) {
+	provider := &mockProvider{reply: "Generated summary."}
+	service := NewAIService(provider, nil, nil, nil)
+
+	prompt := "Write a concise book summary for a bookstore listing.\nTitle: Dune\nAuthor: Frank Herbert\nDescription: Desert planet politics."
+	response, err := service.Generate(context.Background(), prompt)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if response != "Generated summary." {
+		t.Fatalf("unexpected response: %q", response)
+	}
+	if len(provider.prompts) != 1 || provider.prompts[0] != prompt {
+		t.Fatalf("expected direct generation prompt, got %+v", provider.prompts)
 	}
 }
 
@@ -224,7 +371,7 @@ func TestAIServiceChatProviderUnavailable(t *testing.T) {
 }
 
 func TestAIServiceChatSemanticSearchReturnsReferences(t *testing.T) {
-	book := domain.Book{ID: uuid.New(), Name: "Dune"}
+	book := domain.Book{ID: uuid.New(), Name: "Dune", Author: domain.Author{Name: "Frank Herbert"}}
 	provider := &mockProvider{
 		replies: []string{`{"tool":"semantic_search","query":"desert politics"}`},
 		vectors: [][]float64{{0.1, 0.2}},
@@ -236,8 +383,9 @@ func TestAIServiceChatSemanticSearchReturnsReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if response.Message != `Here are some books I found for "desert politics".` {
-		t.Fatalf("unexpected response message: %q", response.Message)
+	expectedMsg := `- Dune by Frank Herbert`
+	if response.Message != expectedMsg {
+		t.Fatalf("unexpected response message:\ngot:  %q\nwant:%s", response.Message, expectedMsg)
 	}
 	if len(response.References) != 1 || response.References[0].ID != book.ID {
 		t.Fatalf("expected semantic search references, got %+v", response.References)

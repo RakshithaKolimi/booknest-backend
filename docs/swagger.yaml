@@ -785,6 +785,8 @@ definitions:
         type: string
       prompt:
         type: string
+      session_id:
+        type: string
     type: object
   domain.AIChatResponse:
     properties:
@@ -794,6 +796,8 @@ definitions:
         items:
           $ref: '#/definitions/Book'
         type: array
+      session_id:
+        type: string
     type: object
   domain.OrderStatus:
     enum:

@@ -38,7 +38,7 @@ func (r *bookEmbeddingRepository) UpdateEmbedding(ctx context.Context, embedding
 		Model(&domain.BookEmbedding{}).
 		Where("book_id = ?", embedding.BookID).
 		Updates(map[string]any{
-			"embedding":   embedding.Embedding,
+			"embedding":  embedding.Embedding,
 			"updated_at": gorm.Expr("NOW()"),
 		}).Error
 }
@@ -96,6 +96,7 @@ func (r *bookEmbeddingRepository) SearchNearestBooks(
 	}
 
 	// Base query using pgvector distance operator (<->) for nearest-neighbor search.
+	// Join with authors table to preload author information.
 	baseQuery := `
 SELECT
   b.id,
@@ -111,9 +112,14 @@ SELECT
   b.discount_percentage,
   b.publisher_id,
   b.created_at,
-  b.updated_at
+  b.updated_at,
+  a.id,
+  a.name,
+  a.created_at,
+  a.updated_at
 FROM books b
 JOIN book_embeddings be ON be.book_id = b.id
+JOIN authors a ON a.id = b.author_id
 WHERE b.deleted_at IS NULL`
 
 	args := []any{query, limit}
@@ -153,6 +159,10 @@ WHERE b.deleted_at IS NULL`
 			&book.PublisherID,
 			&book.CreatedAt,
 			&book.UpdatedAt,
+			&book.Author.ID,
+			&book.Author.Name,
+			&book.Author.CreatedAt,
+			&book.Author.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

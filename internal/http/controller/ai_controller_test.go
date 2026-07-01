@@ -18,8 +18,9 @@ import (
 )
 
 type mockAIService struct {
-	chatFunc  func(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error)
-	embedFunc func(ctx context.Context, inputs []string) ([][]float64, error)
+	chatFunc     func(ctx context.Context, input domain.AIChatRequest, userID string) (*domain.AIChatResponse, error)
+	generateFunc func(ctx context.Context, prompt string) (string, error)
+	embedFunc    func(ctx context.Context, inputs []string) ([][]float64, error)
 }
 
 func (m *mockAIService) Chat(ctx context.Context, request domain.AIChatRequest, userID string) (*domain.AIChatResponse, error) {
@@ -27,6 +28,13 @@ func (m *mockAIService) Chat(ctx context.Context, request domain.AIChatRequest, 
 		return m.chatFunc(ctx, request, userID)
 	}
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockAIService) Generate(ctx context.Context, prompt string) (string, error) {
+	if m.generateFunc != nil {
+		return m.generateFunc(ctx, prompt)
+	}
+	return "", errors.New("not implemented")
 }
 
 func (m *mockAIService) Embed(ctx context.Context, inputs []string) ([][]float64, error) {
@@ -49,7 +57,11 @@ func TestAIControllerChatSuccess(t *testing.T) {
 			if input.Message != "find Dune" {
 				t.Fatalf("expected sanitized message, got %q", input.Message)
 			}
+			if input.SessionID != "abc-123" {
+				t.Fatalf("expected session ID from request, got %q", input.SessionID)
+			}
 			return &domain.AIChatResponse{
+				SessionID:  "abc-123",
 				Message:    "Here is the book I found.",
 				References: []domain.Book{book},
 			}, nil
@@ -60,7 +72,7 @@ func TestAIControllerChatSuccess(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Set("user_id", userID.String())
-	c.Request = httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(`{"message":"  find   Dune  "}`))
+	c.Request = httptest.NewRequest(http.MethodPost, "/ai/chat", bytes.NewBufferString(`{"session_id":"abc-123","message":"  find   Dune  "}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
 	controller.Chat(c)
@@ -75,6 +87,9 @@ func TestAIControllerChatSuccess(t *testing.T) {
 	}
 	if response.Message != "Here is the book I found." {
 		t.Fatalf("unexpected response message: %q", response.Message)
+	}
+	if response.SessionID != "abc-123" {
+		t.Fatalf("unexpected session ID: %q", response.SessionID)
 	}
 	if len(response.References) != 1 || response.References[0].ID != book.ID {
 		t.Fatalf("unexpected references: %+v", response.References)
@@ -180,6 +195,8 @@ func TestAIControllerChatServiceErrorMapping(t *testing.T) {
 		want int
 	}{
 		{name: "message required", err: errors.New("message is required"), want: http.StatusBadRequest},
+		{name: "invalid session ID", err: ai_service.ErrInvalidSessionID, want: http.StatusBadRequest},
+		{name: "forbidden session", err: ai_service.ErrForbiddenSession, want: http.StatusForbidden},
 		{name: "unknown service error", err: errors.New("provider failed"), want: http.StatusInternalServerError},
 	}
 
