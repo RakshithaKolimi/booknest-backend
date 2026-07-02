@@ -108,7 +108,7 @@ func (s *aiService) Generate(ctx context.Context, prompt string) (string, error)
 		return "", ErrProviderUnavailable
 	}
 
-	response, err := s.provider.Generate(ctx, prompt)
+	response, err := s.provider.Generate(ctx, prompt, 0.7)
 	if err != nil {
 		return "", fmt.Errorf("generate response: %w", err)
 	}
@@ -320,7 +320,8 @@ func (s *aiService) handleRecommendations(ctx context.Context, toolCall domain.A
 }
 
 func (s *aiService) handleChat(ctx context.Context, toolCall domain.AIIntentToolCall, userID string) (*domain.AIChatResponse, error) {
-	response, err := s.provider.Generate(ctx, toolCall.Query)
+	chat := buildChatPrompt(toolCall.Query)
+	response, err := s.provider.Generate(ctx, chat, 0.3)
 	if err != nil {
 		return nil, fmt.Errorf("generate chat response: %w", err)
 	}
@@ -464,7 +465,7 @@ func (s *aiService) GetTool(ctx context.Context, input string) (domain.AIIntentT
 	}
 
 	prompt := fmt.Sprintf(IntentDetectionPrompt, input)
-	response, err := s.provider.Generate(ctx, prompt)
+	response, err := s.provider.Generate(ctx, prompt, 0.7)
 	if err != nil {
 		return domain.AIIntentToolCall{}, err
 	}

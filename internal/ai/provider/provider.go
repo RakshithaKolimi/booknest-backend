@@ -9,7 +9,7 @@ import (
 const ProviderOpenAI = "openai"
 
 type Provider interface {
-	Generate(ctx context.Context, prompt string) (string, error)
+	Generate(ctx context.Context, prompt string, temparature float64) (string, error)
 	Embed(ctx context.Context, inputs []string) ([][]float64, error)
 }
 

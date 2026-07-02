@@ -72,7 +72,7 @@ func NewOpenAIProvider(cfg OpenAIConfig) (*OpenAIProvider, error) {
 	return &provider, nil
 }
 
-func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, error) {
+func (p *OpenAIProvider) Generate(ctx context.Context, prompt string, temperature float64) (string, error) {
 	// Basic validation
 	if strings.TrimSpace(prompt) == "" {
 		return "", errors.New("prompt is required")
@@ -82,7 +82,7 @@ func (p *OpenAIProvider) Generate(ctx context.Context, prompt string) (string, e
 	res, err := p.client.Responses.New(ctx, responses.ResponseNewParams{
 		Model:           p.model,
 		Input:           responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
-		Temperature:     openai.Float(0.7),
+		Temperature:     openai.Float(temperature),
 		MaxOutputTokens: openai.Int(200),
 	})
 	if err != nil {

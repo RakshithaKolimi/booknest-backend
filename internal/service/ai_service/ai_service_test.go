@@ -23,7 +23,7 @@ type mockProvider struct {
 	vectors [][]float64
 }
 
-func (m *mockProvider) Generate(ctx context.Context, prompt string) (string, error) {
+func (m *mockProvider) Generate(ctx context.Context, prompt string, temperature float64) (string, error) {
 	m.prompt = prompt
 	m.prompts = append(m.prompts, prompt)
 	if m.err != nil {
@@ -246,8 +246,11 @@ func TestAIServiceChat(t *testing.T) {
 	if response.Message != "A useful answer." {
 		t.Fatalf("unexpected response: %+v", response)
 	}
-	if len(provider.prompts) != 2 || provider.prompts[1] != "hello" {
-		t.Fatalf("expected trimmed chat prompt, got %+v", provider.prompts)
+	if len(provider.prompts) != 2 {
+		t.Fatalf("expected intent and chat prompts, got %+v", provider.prompts)
+	}
+	if !strings.Contains(provider.prompts[1], "user query: hello") {
+		t.Fatalf("expected trimmed chat prompt, got %+v", provider.prompts[1])
 	}
 }
 
@@ -308,6 +311,8 @@ func TestAIServiceChatUsesExistingSessionHistory(t *testing.T) {
 		t.Fatalf("expected intent and chat prompts, got %+v", provider.prompts)
 	}
 	for _, want := range []string{
+		"Identity:",
+		"user query: Conversation so far:",
 		"Conversation so far:",
 		"user: recommend fantasy books",
 		"assistant: Try The Hobbit.",
@@ -330,8 +335,11 @@ func TestAIServiceChatUsesPromptAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if len(provider.prompts) != 2 || provider.prompts[1] != "legacy prompt" {
-		t.Fatalf("expected prompt alias, got %+v", provider.prompts)
+	if len(provider.prompts) != 2 {
+		t.Fatalf("expected intent and chat prompts, got %+v", provider.prompts)
+	}
+	if !strings.Contains(provider.prompts[1], "user query: legacy prompt") {
+		t.Fatalf("expected prompt alias, got %+v", provider.prompts[1])
 	}
 }
 
